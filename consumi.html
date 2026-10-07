@@ -67,7 +67,7 @@
 <script src="chiavi-cifrate.js?v=20261008h"></script>
 <script src="cassaforte.js?v=20261008h"></script>
 <script src="nav.js?v=20261008h" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
-<script src="barca.js?v=20261008k"></script>
+<script src="barca.js?v=20261008l"></script>
 <script>
 /* ---------- carte consumi ---------- */
 function boatCard(key, name, capLabel){
@@ -160,17 +160,17 @@ function renderConsumi(){
 
 /* ---------- grafico consumo mobile ---------- */
 function renderRateChart(){
-  const all = ROWS.filter(valida);
+  const all = ROWS.filter(valida), NT = intervalliTratti(all);
   const X = [], Y = [], C = [], H = [], R = [];
   for (let i = 0; i < all.length; i++){
     const t = all[i].t.getTime(), da = Math.max(t - CONFIG.CAL_MIN_DAYS*DAY, inizioPulito(t) - 1);   // finestra che non attraversa una ricarica
     const win = all.filter(r => r.t.getTime() <= t && r.t.getTime() > da);
     const f = linfitRobusto(win.map(p => ({ t:p.t, y:p.iot })));
     if (!f || f.spanDays < CONFIG.CAL_MIN_DAYS - 0.5) continue;
-    const gap = i > 0 ? (t - all[i-1].t.getTime())/3600000 : null;
+    const N = i > 0 ? NT[i-1] : null;   // intervallo del tratto che arriva a questa lettura (invii mancati esclusi)
     const att = masterAtteso(win), pct = scostamento(-f.slope, att), fuori = fuoriMaster(pct);
     X.push(romeStr(all[i].t)); Y.push(-f.slope); R.push(att);
-    C.push(fuori ? (pct > 0 ? '#ff5c5c' : '#4cd38a') : gap == null ? '#888' : gap < 4.5 ? '#ffb84d' : gap < 8 ? '#6aa6ff' : '#888');
+    C.push(fuori ? (pct > 0 ? '#ff5c5c' : '#4cd38a') : N === 3 ? '#ffb84d' : N === 6 ? '#6aa6ff' : '#888');
     H.push(att == null ? '' : `master ${nf(att,1)} → ${pct >= 0 ? '+' : ''}${nf(pct,0)}%${fuori ? (pct > 0 ? ' ⚠ consumo extra' : ' sotto il master') : ''}`);
   }
   const el = $('ch-rate');

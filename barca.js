@@ -124,15 +124,32 @@ const snapN = h => [3,6,12,24].find(k => Math.abs(h-k)/k < 0.2) || null;
 // regressione delle letture vere, cosi' il confronto e' alla pari anche quando l'intervallo cambia.
 function masterAtteso(pts){
   if (pts.length < 3) return null;
+  const Ns = intervalliTratti(pts);
   let v = 0, ok = 0; const sint = [{ t: pts[0].t, y: 0 }];
   for (let i = 1; i < pts.length; i++){
-    const h = (pts[i].t - pts[i-1].t) / 3600000;
-    const N = snapN(Math.min(h, i > 1 ? (pts[i-1].t - pts[i-2].t)/3600000 : Infinity)) || snapN(h);
-    if (N){ v -= master(N) * h / 24; ok++; }
+    const N = Ns[i-1];
+    if (N){ v -= master(N) * (pts[i].t - pts[i-1].t) / DAY; ok++; }
     sint.push({ t: pts[i].t, y: v });
   }
   const f = ok ? linfit(sint) : null;
   return f ? -f.slope : null;
+}
+// Intervallo di invio di ogni tratto tra due letture consecutive (array lungo pts.length-1).
+// Un tratto piu' lungo del normale e' un invio mancato (rete assente): l'intervallo non cambia e il
+// consumo di quel risveglio resta nel calo di tensione. L'intervallo cambia solo se compare un tratto
+// piu' corto (un invio mancato non puo' accorciarlo) o se due tratti di fila valgono un intervallo piu'
+// lungo (come dopo un comando INTERVALLO).
+function intervalliTratti(pts){
+  const g = []; for (let i = 1; i < pts.length; i++) g.push((pts[i].t - pts[i-1].t) / 3600000);
+  const out = []; let cur = null;
+  for (let i = 0; i < g.length; i++){
+    const sN = snapN(g[i]);
+    if (!cur) cur = sN;
+    else if (sN && sN < cur) cur = sN;
+    else if (sN && sN > cur && i + 1 < g.length && snapN(g[i+1]) === sN) cur = sN;
+    out.push(cur);
+  }
+  return out;
 }
 const scostamento = (mis, rif) => rif ? (mis / rif - 1) * 100 : null;
 const fuoriMaster = pct => pct != null && Math.abs(pct) > CONFIG.SCOSTAMENTO_PCT;
@@ -174,18 +191,14 @@ const epoca = t => RICARICHE.filter(r => r <= t).length;   // quante ricariche (
 // ciascuno e ricava P_SLEEP ed E_CICLO con una regressione pesata sulla durata dei periodi.
 function calibraModello(){
   const pts = ROWS.filter(valida);
-  const snap = h => [3,6,12,24].find(k => Math.abs(h-k)/k < 0.2) || null;
-  // intervallo di ogni lettura = il piu' breve tra i due vicini (un invio saltato allunga solo un lato)
-  const lab = pts.map((p, i) => {
-    const g = [i > 0 ? (p.t - pts[i-1].t)/3600000 : Infinity, i < pts.length-1 ? (pts[i+1].t - p.t)/3600000 : Infinity];
-    return snap(Math.min(...g));
-  });
-  const seg = [];
-  for (let i = 0; i < pts.length; i++){
-    if (!lab[i]) continue;
-    const last = seg[seg.length-1];
-    if (last && last.N === lab[i] && last.end === i-1 && epoca(last.pts[0].t.getTime()) === epoca(pts[i].t.getTime())){ last.pts.push(pts[i]); last.end = i; }
-    else seg.push({ N: lab[i], pts: [pts[i]], end: i });
+  // periodi = tratti consecutivi con lo stesso intervallo (gli invii mancati non li spezzano),
+  // mai a cavallo di una ricarica
+  const NT = intervalliTratti(pts), seg = [];
+  for (let i = 1; i < pts.length; i++){
+    const N = NT[i-1], last = seg[seg.length-1];
+    if (!N) continue;
+    if (last && last.N === N && last.end === i-1 && epoca(last.pts[0].t.getTime()) === epoca(pts[i].t.getTime())){ last.pts.push(pts[i]); last.end = i; }
+    else seg.push({ N, pts: [pts[i-1], pts[i]], end: i });
   }
   const misure = {};
   for (const s of seg){
