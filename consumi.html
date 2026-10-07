@@ -6,7 +6,7 @@
 <title>Barca-IoT · Consumi e comandi</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
-<link rel="stylesheet" href="barca.css?v=20261008h">
+<link rel="stylesheet" href="barca.css?v=20261008r">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body>
@@ -23,27 +23,23 @@
   <div class="cons-grid" id="cons"></div>
 
   <section class="panel block">
-    <h2><span>Consumo batteria IoT nel tempo</span><span class="rng">mV/giorno · stima mobile sugli ultimi 5 giorni</span></h2>
+    <h2><span>Consumo batteria IoT nel tempo<details class="info"><summary title="Info">i</summary><div class="info-box"><ul><li>Punto = consumo medio dei <b>5 giorni</b> precedenti (mV/giorno)</li><li>Tratteggio = <b>master</b> a 3 / 6 / 12 h</li><li>Linea a gradini = master atteso per l'intervallo in uso</li><li>🟠 3 h · 🔵 6 h · ⚪ 12 h+</li><li><b style="color:var(--danger)">rosso</b> = oltre +15% (consumo extra) · <b style="color:var(--ok)">verde</b> = oltre −15%</li></ul></div></details></span><span class="rng">mV/giorno · media mobile 5 giorni</span></h2>
     <div class="chart" id="ch-rate"></div>
-    <div class="note">Ogni punto è la pendenza (regressione) delle letture dei 5 giorni precedenti, riportata a mV/giorno. Le righe tratteggiate sono il <b>master</b> (consumo pulito di riferimento) a 3, 6 e 12 h; la linea grigia a gradini è il master atteso per l'intervallo in uso. Punti azzurri = invii ogni 6 h, arancio = ogni 3 h, grigi = 12 h o più; <b style="color:var(--danger)">rossi</b> = oltre il 15% sopra il master (consumo extra), <b style="color:var(--ok)">verdi</b> = oltre il 15% sotto.</div>
+
   </section>
 
   <section class="panel block">
-    <h2><span>Deep sleep e risvegli: cosa determina la durata</span><span class="rng" id="split-sub"></span></h2>
+    <h2><span>Deep sleep e risvegli: cosa determina la durata<details class="info"><summary title="Info">i</summary><div class="info-box"><ul><li><b>Master</b> = consumo pulito di riferimento, fisso</li><li>Da periodi ≥ 5 gg senza anomalie: 6 h (22-28/09) e 3 h (28/09-03/10)</li><li>Consumo = deep sleep + risvegli al giorno × costo risveglio</li></ul></div></details></span><span class="rng" id="split-sub"></span></h2>
     <div class="duo">
-      <div><h3>Consumo in 24 ore: deep sleep + risvegli · ◆ = misurato</h3><div class="chart" id="ch-split"></div></div>
-      <div><h3>Come è ricavato il master · confronto con le misure</h3><div class="chart" id="ch-cal"></div></div>
+      <div><h3>Consumo in 24 ore<details class="info"><summary title="Info">i</summary><div class="info-box"><ul><li>🟦 deep sleep: uguale per ogni intervallo</li><li>🟧 risvegli: n° al giorno × costo di uno</li><li>→ giorni fino a 3500 mV con la carica attuale</li><li>Giorni: consumo <b>misurato</b> se disponibile, altrimenti <b>stima</b> (master)</li><li>◆ = consumo misurato</li></ul></div></details></h3><div class="chart" id="ch-split"></div></div>
+      <div><h3>Come è ricavato il master<details class="info dx"><summary title="Info">i</summary><div class="info-box"><ul><li>Triangolo 🟧: consumo in più ÷ risvegli in più = <b>costo di un risveglio</b></li><li>Retta fino a 0 risvegli = <b>deep sleep</b> (fascia 🟦)</li><li>◆ = periodi misurati · <b style="color:var(--danger)">rosso</b> / <b style="color:var(--ok)">verde</b> se oltre ±15% dal master</li></ul></div></details></h3><div class="chart" id="ch-cal"></div></div>
     </div>
-    <div class="note">Il <b>master</b> è il consumo "pulito" di riferimento, fisso: calcolato da periodi di almeno 5 giorni senza consumi anomali (6 h dal 22 al 28/09, 5,8 giorni; 3 h dal 28/09 al 03/10, 5,3 giorni).
-      A sinistra: ogni barra è quanto consuma la scheda in <b>24 ore</b> a quell'intervallo: la parte <b>blu</b> è il deep sleep (sempre uguale), la parte <b>arancio</b> sono i risvegli (numero di risvegli al giorno × costo di un risveglio); a destra della barra il conto per esteso e i <b>giorni stimati</b> fino a 3500 mV con la carica attuale (come nella tabella: consumo misurato se l'intervallo è già stato misurato, altrimenti master). Il rombo è il consumo misurato (dettagli passando sopra).
-      A destra: il triangolo arancio tra i due riferimenti dà il costo di un risveglio; prolungando fino a 0 risvegli resta il deep sleep (fascia blu).
-      I rombi sono i periodi misurati: se si scostano dal master più del 15% diventano <b style="color:var(--danger)">rossi</b> (consumo extra: GPS, rete, caldo…) o <b style="color:var(--ok)">verdi</b>.</div>
+
   </section>
 
   <section class="panel block">
-    <h2><span>Comandi per la scheda</span><span class="rng" id="cmd-int"></span></h2>
-    <div class="note" style="margin-top:0">La scheda legge i messaggi Telegram solo quando si sveglia: un comando viene eseguito al <b>prossimo ciclo</b> (entro 3-6 ore). Premi un pulsante per copiare il comando, poi incollalo nella chat del bot.
-      <span id="tg-link"></span></div>
+    <h2><span>Comandi per la scheda<details class="info"><summary title="Info">i</summary><div class="info-box"><ul><li>Premi un comando → viene copiato</li><li>Incollalo nella chat del bot Telegram</li><li>Eseguito al <b>prossimo risveglio</b> della scheda</li></ul></div></details></span><span class="rng" id="cmd-int"></span></h2>
+    <span id="tg-link"></span>
     <div class="cmd-grid" id="cmds"></div>
   </section>
 
@@ -67,8 +63,11 @@
 <script src="chiavi-cifrate.js?v=20261008h"></script>
 <script src="cassaforte.js?v=20261008h"></script>
 <script src="nav.js?v=20261008h" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
-<script src="barca.js?v=20261008p"></script>
+<script src="barca.js?v=20261008q"></script>
 <script>
+/* ---------- info (i): un solo box aperto, chiuso cliccando fuori ---------- */
+document.addEventListener('click', e => document.querySelectorAll('details.info[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }));
+
 /* ---------- carte consumi ---------- */
 function boatCard(key, name, capLabel){
   const cap = CONFIG.CAP_AH[key], v = lastN(key);
@@ -77,7 +76,7 @@ function boatCard(key, name, capLabel){
   const pts = ROWS.filter(r => r[key] != null && r.t.getTime() >= Math.max(lastT - CONFIG.TREND_DAYS_BOAT*DAY, cs));
   const fitV = linfit(pts.map(p => ({ t:p.t, y:p[key] })));
   const fitS = linfit(pts.map(p => ({ t:p.t, y:soc(p[key]) })));
-  let h = `<div class="card"><h3>${name} <span style="text-transform:none;letter-spacing:0">(${capLabel})</span></h3>`;
+  let h = `<div class="card"><h3>${name} <span style="text-transform:none;letter-spacing:0">(${capLabel})</span><details class="info dx"><summary title="Info">i</summary><div class="info-box"><ul><li>% e Ah stimati dalla tensione (curva AGM)</li><li>Carichi accesi o ricarica falsano la lettura</li></ul></div></details></h3>`;
   if (v == null) return h + '<div class="row d">Nessun dato.</div></div>';
   h += `<div class="big">${nf(v,2)} <small>V · ~${nf(soc(v),0)}%</small></div>`;
   if (!fitV || fitV.spanDays < 1.5){
@@ -106,7 +105,7 @@ function renderConsumi(){
   const N = itv.N && itv.N >= 1 ? itv.N : null;
   $('sub').textContent = N ? `intervallo attuale: ogni ${nf(N, itv.snapped ? 0 : 1)} h` : '';
 
-  let c1 = '<div class="card"><h3>Consumo batteria IoT</h3>';
+  let c1 = '<div class="card"><h3>Consumo batteria IoT<details class="info"><summary title="Info">i</summary><div class="info-box"><ul><li>Grande = consumo previsto all\'intervallo attuale</li><li>Barra = 🟦 deep sleep · 🟧 risvegli</li><li>Misurato = ultimi 5 gg (picchi e ricariche esclusi)</li><li>Confronto con il master dello stesso periodo: <b style="color:var(--danger)">rosso</b> se oltre +15%</li></ul></div></details></h3>';
   if (!N){
     c1 += '<div class="row d">Intervallo non rilevabile o troppo breve (modalità test): modello non applicabile.</div>';
   } else {
@@ -130,10 +129,9 @@ function renderConsumi(){
   }
   const mis = Object.keys(MODEL.misure).map(Number).sort((a,b) => a-b)
     .map(k => `${k} h: <b>${nf(MODEL.misure[k].rate,1)}</b> (${nf(MODEL.misure[k].giorni,1)} gg)`).join(' · ');
-  c1 += `<div class="note">Previsione: intervalli misurati (almeno ${CONFIG.CAL_MIN_DAYS} giorni, picchi scartati) = consumo reale${mis ? ' (' + mis + ')' : ''}; ` +
-    `gli altri = <b>master</b> fisso ${nf(CONFIG.MASTER.P,2)} + (24/N) × ${nf(CONFIG.MASTER.E,3)} mV/giorno.</div></div>`;
+  c1 += `</div>`;
 
-  let c2 = '<div class="card"><h3>Autonomia batteria IoT (senza ricarica)</h3>';
+  let c2 = '<div class="card"><h3>Autonomia batteria IoT<details class="info dx"><summary title="Info">i</summary><div class="info-box"><ul><li>Ricarica consigliata = arrivo a <b>3500 mV</b> (ALERT)</li><li>Usa il più alto tra misurato recente e previsto (prudente)</li><li>Tabella: <b>misurato</b> se l\'intervallo è già misurato, <b>stima</b> = master</li><li>Vicino a 3300 mV la tensione crolla: valori ottimistici</li></ul></div></details></h3>';
   if (iot == null) c2 += '<div class="row d">Nessun dato.</div>';
   else {
     const rc = iotRecharge();
@@ -143,7 +141,7 @@ function renderConsumi(){
       c2 += `<div class="row d" style="margin-bottom:2px">Ricarica consigliata entro</div>`;
       c2 += `<div class="big" style="color:${col}">${rc.daysAlert <= 0 ? 'ORA' : dayStr(rc.dAlert)} <small>${rc.daysAlert <= 0 ? '' : '~' + daysStr(rc.daysAlert) + ' · '}a ${CONFIG.IOT_ALERT} mV</small></div>`;
       c2 += `<div class="row">Critica (${CONFIG.IOT_CRIT} mV): <b>${dayStr(rc.dCrit)}</b> (~${daysStr(Math.max(0, rc.daysCrit))})</div>`;
-      c2 += `<div class="row d">Consumo usato: <b>${nf(rc.rate,1)} mV/giorno</b> (${rc.src}${rc.meas != null && rc.mod != null ? `; misurato ultimi giorni ${nf(rc.meas,1)}, previsto ${nf(rc.N,0)} h ${nf(rc.mod,1)} da ${fontePrevisto(rc.N)}` : ''}): il più alto dei due, per prudenza.</div>`;
+      c2 += `<div class="row d">Calcolato con <b>${nf(rc.rate,1)} mV/g</b> (${rc.src})</div>`;
       c2 += '<hr style="border:0;border-top:1px solid var(--line);margin:8px 0">';
     }
     c2 += `<div class="row d">Da ${nf(iot,0)} mV (mediana ultime 3 letture) fino a:</div>`;
@@ -153,11 +151,11 @@ function renderConsumi(){
       const misurato = MODEL.misure[k];
       c2 += `<tr class="${N === k ? 'hl' : ''}"><td>${k} h${misurato ? '' : '<span class="tag2">stima</span>'}</td><td>${nf(r,1)}</td><td>${daysStr((iot-CONFIG.IOT_ALERT)/r)}</td><td>${daysStr((iot-CONFIG.IOT_CRIT)/r)}</td></tr>`;
     }
-    c2 += '</table></div><div class="note">Intervalli misurati: consumo reale. "stima" = intervallo non ancora misurato: si usa il master. Verso fine scarica la tensione cala più in fretta: i valori vicino a 3300 mV sono ottimistici.</div>';
+    c2 += '</table></div>';
   }
   c2 += '</div>';
 
-  const boatNote = '<div class="note" style="margin:0">Stime indicative dalla tensione (tabella carica AGM): carichi o ricarica in corso falsano la lettura.</div>';
+  const boatNote = '';
   $('cons').innerHTML = c1 + c2 + `<div class="stack">${boatCard('v2','Batterie Servizi','2 × 80 Ah')}${boatCard('v1','Batteria Motore','80 Ah da confermare')}${boatNote}</div>`;
 }
 
