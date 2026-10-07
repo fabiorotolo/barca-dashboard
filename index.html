@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="barca.css?v=20261007b">
+<link rel="stylesheet" href="barca.css?v=20261007c">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
@@ -48,11 +48,13 @@
       <button class="btn" data-range="30">1m</button>
       <button class="btn" data-range="all">Tutto</button>
     </div>
-    <div class="navs"><button class="btn" type="button" data-logout title="Dimentica la chiave su questo dispositivo">🔒 Esci</button> <a class="btn" href="https://fabiorotolo.github.io/meteo-dashboard/index.html">🌤 Meteo →</a> <a class="btn" href="consumi.html">⚡ Consumi e comandi →</a></div>
+    <div class="navs"><button class="btn" type="button" data-logout title="Esci da Barca e Meteo su questo dispositivo">🔒 Esci</button> <a class="btn" href="https://fabiorotolo.github.io/meteo-dashboard/index.html">🌤 Meteo →</a> <a class="btn" href="consumi.html">⚡ Consumi e comandi →</a></div>
   </div>
 </div>
 
-<script src="barca.js?v=20261007b"></script>
+<script src="chiavi-cifrate.js?v=20261007c"></script>
+<script src="cassaforte.js?v=20261007c"></script>
+<script src="barca.js?v=20261007c"></script>
 <script>
 function setTile(id, cls, val, unit, tag){
   const el = $(id);
