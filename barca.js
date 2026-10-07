@@ -105,7 +105,11 @@ function readKey(){
     return localStorage.getItem(KEY_STORE) || '';
   } catch(e){ return ''; }
 }
-function logout(){ try { localStorage.removeItem(KEY_STORE); } catch(e){} location.reload(); }
+function logout(){
+  try { localStorage.removeItem(KEY_STORE); } catch(e){}
+  location.replace(location.pathname);   // ricarica senza dati e senza eventuale ?key= nell'indirizzo
+}
+document.querySelectorAll('[data-logout]').forEach(b => b.addEventListener('click', logout));
 function askKey(msg){
   if ($('login')) return;
   const d = document.createElement('div');
