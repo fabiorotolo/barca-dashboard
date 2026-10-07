@@ -3,8 +3,8 @@
 // ========================
 // Le Read API Key ThingSpeak stanno in chiavi-cifrate.js, cifrate con AES-GCM
 // (chiave ricavata dalla password con PBKDF2-SHA256). Senza password sono illeggibili.
-// La password si inserisce una volta per dispositivo e per sito (barca su github.io, meteo su
-// vercel.app sono siti diversi per il browser): le chiavi decifrate vengono salvate nel browser.
+// La password si inserisce una volta per dispositivo: le chiavi decifrate vengono salvate
+// nel browser e valgono per barca-dashboard e meteo-dashboard (stesso sito fabiorotolo.github.io).
 // File identico nei due repository. Per cambiare chiavi o password: cifra-chiavi.html
 
 const CASSAFORTE_BARCA = "barca-read-key";     // usata da barca-dashboard
@@ -54,7 +54,7 @@ function cassaforteForm(msg) {
   d.innerHTML = `
     <form style="background:#1f2330;border:1px solid #3a3f4d;border-radius:12px;padding:18px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px;color:#f4f4f7">
       <div style="font-size:18px;font-weight:700">🔒 Accesso riservato</div>
-      <div style="font-size:13px;color:#9aa0b0;line-height:1.4">${msg || "Inserisci la password delle dashboard. Basta una volta su questo dispositivo (è la stessa per Barca e Meteo)."}</div>
+      <div style="font-size:13px;color:#9aa0b0;line-height:1.4">${msg || "Inserisci la password delle dashboard. Basta una volta su questo dispositivo: vale per Barca e Meteo."}</div>
       <input type="password" autocomplete="current-password" required placeholder="Password"
         style="background:#12141b;color:#fff;border:1px solid #3a3f4d;border-radius:7px;padding:10px;font-size:15px">
       <div class="err" style="display:none;font-size:13px;color:#ff7b7b">Password errata.</div>
