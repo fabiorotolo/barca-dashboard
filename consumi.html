@@ -68,7 +68,7 @@
 <script src="chiavi-cifrate.js?v=20261008h"></script>
 <script src="cassaforte.js?v=20261008h"></script>
 <script src="nav.js?v=20261008h" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
-<script src="barca.js?v=20261008h"></script>
+<script src="barca.js?v=20261008i"></script>
 <script>
 /* ---------- carte consumi ---------- */
 function boatCard(key, name, capLabel){
@@ -102,7 +102,7 @@ function renderConsumi(){
   const itv = detectInterval(), iot = lastN('iot');
   const lastT = ROWS.length ? ROWS[ROWS.length-1].t.getTime() : Date.now();
   const cs = inizioPulito(lastT);
-  const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= Math.max(cs, lastT - CONFIG.TREND_DAYS_IOT*DAY));
+  const pts = ROWS.filter(r => valida(r) && r.t.getTime() >= Math.max(cs, lastT - CONFIG.TREND_DAYS_IOT*DAY));
   const fit = linfitRobusto(pts.map(p => ({ t:p.t, y:p.iot })));
   const N = itv.N && itv.N >= 1 ? itv.N : null;
   $('sub').textContent = N ? `intervallo attuale: ogni ${nf(N, itv.snapped ? 0 : 1)} h` : '';
@@ -158,7 +158,7 @@ function renderConsumi(){
 
 /* ---------- grafico consumo mobile ---------- */
 function renderRateChart(){
-  const all = ROWS.filter(r => r.iot != null && r.t.getTime() >= inizioPulito(r.t.getTime()));
+  const all = ROWS.filter(valida);
   const X = [], Y = [], C = [];
   for (let i = 0; i < all.length; i++){
     const t = all[i].t.getTime(), da = Math.max(t - 3*DAY, inizioPulito(t) - 1);   // finestra che non attraversa una ricarica
