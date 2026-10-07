@@ -13,10 +13,13 @@ const CONFIG = {
   // soglie batteria IoT (come nel firmware)
   IOT_ALERT: 3500, IOT_CRIT: 3300,
 
-  // Modello consumo IoT, misurato in barca (test 6h 21-27/09 e 3h 28/09-04/10 2026):
-  //   consumo(N) [mV/giorno] = P_SLEEP + (24/N) * E_CICLO     (N = intervallo in ore)
+  // Modello consumo IoT:  consumo(N) [mV/giorno] = P_SLEEP + (24/N) * E_CICLO   (N = intervallo in ore)
+  // I due parametri vengono RICALCOLATI DAI DATI a ogni aggiornamento (calibraModello): si misura il
+  // consumo in ogni periodo con intervallo costante e si adatta la retta. Questi valori servono solo
+  // finche' non ci sono almeno due intervalli diversi misurati (test 6h e 3h di settembre-ottobre 2026).
   P_SLEEP: 12.72,   // mV/giorno consumati dal solo deep sleep
   E_CICLO: 1.863,   // mV consumati da ogni ciclo di lavoro (risveglio, rete, GPS, invii)
+  CAL_MIN_DAYS: 1.5, CAL_MIN_POINTS: 6,   // periodo minimo per misurare il consumo di un intervallo
 
   // soglie batterie barca (AGM 12 V): ALERT ~50%, CRITICA ~10%
   BOAT_ALERT: 12.2, BOAT_CRIT: 11.8,
@@ -83,7 +86,46 @@ function haversine(a,b){
   const h = Math.sin(dLat/2)**2 + Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dLon/2)**2;
   return 2*R*Math.asin(Math.sqrt(h));
 }
-const model = N => ({ sleep: CONFIG.P_SLEEP, work: (24/N)*CONFIG.E_CICLO, total: CONFIG.P_SLEEP + (24/N)*CONFIG.E_CICLO });
+// parametri del modello in uso (aggiornati da calibraModello dopo ogni caricamento dati)
+let MODEL = { P: CONFIG.P_SLEEP, E: CONFIG.E_CICLO, auto: false, misure: {} };
+const model = N => ({ sleep: MODEL.P, work: (24/N)*MODEL.E, total: MODEL.P + (24/N)*MODEL.E });
+
+// Divide le letture (dopo CLEAN_START) in periodi con intervallo costante, misura il consumo di
+// ciascuno e ricava P_SLEEP ed E_CICLO con una regressione pesata sulla durata dei periodi.
+function calibraModello(){
+  const cs = new Date(CONFIG.CLEAN_START).getTime();
+  const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= cs);
+  const snap = h => [3,6,12,24].find(k => Math.abs(h-k)/k < 0.2) || null;
+  // intervallo di ogni lettura = il piu' breve tra i due vicini (un invio saltato allunga solo un lato)
+  const lab = pts.map((p, i) => {
+    const g = [i > 0 ? (p.t - pts[i-1].t)/3600000 : Infinity, i < pts.length-1 ? (pts[i+1].t - p.t)/3600000 : Infinity];
+    return snap(Math.min(...g));
+  });
+  const seg = [];
+  for (let i = 0; i < pts.length; i++){
+    if (!lab[i]) continue;
+    const last = seg[seg.length-1];
+    if (last && last.N === lab[i] && last.end === i-1){ last.pts.push(pts[i]); last.end = i; }
+    else seg.push({ N: lab[i], pts: [pts[i]], end: i });
+  }
+  const misure = {};
+  for (const s of seg){
+    const f = linfit(s.pts.map(p => ({ t:p.t, y:p.iot })));
+    if (!f || f.spanDays < CONFIG.CAL_MIN_DAYS || f.n < CONFIG.CAL_MIN_POINTS) continue;
+    const m = misure[s.N] || (misure[s.N] = { w:0, sum:0, n:0 });
+    m.w += f.spanDays; m.sum += -f.slope * f.spanDays; m.n += f.n;
+  }
+  for (const N in misure){ misure[N].rate = misure[N].sum / misure[N].w; misure[N].giorni = misure[N].w; }
+  const Ns = Object.keys(misure).map(Number);
+  MODEL = { P: CONFIG.P_SLEEP, E: CONFIG.E_CICLO, auto: false, misure };
+  if (Ns.length >= 2){
+    // retta rate = P + c*E con c = cicli al giorno, pesata con i giorni di misura
+    let W=0, Sx=0, Sy=0, Sxx=0, Sxy=0;
+    for (const N of Ns){ const w = misure[N].w, x = 24/N, y = misure[N].rate; W+=w; Sx+=w*x; Sy+=w*y; Sxx+=w*x*x; Sxy+=w*x*y; }
+    const E = (W*Sxy - Sx*Sy) / (W*Sxx - Sx*Sx), P = (Sy - E*Sx) / W;
+    if (isFinite(E) && isFinite(P) && E > 0 && P > 0) MODEL = { P, E, auto: true, misure };
+  }
+}
 
 /* ================= DATI ================= */
 let ROWS = [];
@@ -123,6 +165,7 @@ async function loadData(){
     if (lat == null || lon == null || (lat === 0 && lon === 0) || Math.abs(lat) > 90 || Math.abs(lon) > 180){ lat = lon = null; }
     return { t: new Date(f.created_at), v1, v2, iot, lat, lon };
   }).filter(r => !isNaN(r.t)).sort((a,b) => a.t - b.t);
+  calibraModello();
 }
 // dove stanno latitudine e longitudine nel canale
 function gpsKeys(feeds){
