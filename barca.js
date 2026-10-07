@@ -156,6 +156,12 @@ function intervalliTratti(pts){
 // altrimenti il master (prudente: a 12 e 24 h prevede piu' consumo del modello automatico).
 const previsto = N => MODEL.misure[N] ? MODEL.misure[N].rate : master(N);
 const fontePrevisto = N => MODEL.misure[N] ? 'misurato' : 'master';
+// composizione di una finestra di letture: giorni per intervallo, es. "4,0 gg a 3 h + 1,0 gg a 12 h"
+function composizione(pts){
+  const NT = intervalliTratti(pts), gg = {};
+  for (let i = 1; i < pts.length; i++) if (NT[i-1]) gg[NT[i-1]] = (gg[NT[i-1]] || 0) + (pts[i].t - pts[i-1].t) / DAY;
+  return Object.keys(gg).map(Number).sort((a,b) => a-b).map(N => `${nf(gg[N],1)} gg a ${N} h`).join(' + ');
+}
 const scostamento = (mis, rif) => rif ? (mis / rif - 1) * 100 : null;
 const fuoriMaster = pct => pct != null && Math.abs(pct) > CONFIG.SCOSTAMENTO_PCT;
 const model = N => ({ sleep: MODEL.P, work: (24/N)*MODEL.E, total: MODEL.P + (24/N)*MODEL.E });
