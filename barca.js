@@ -154,6 +154,29 @@ function detectInterval(){
   const snap = [3,6,12,24].find(k => Math.abs(med-k)/k < 0.2);
   return { raw: med, N: snap || med, snapped: !!snap };
 }
+// Quando ricaricare la batteria IoT: giorni fino a ALERT (3500) e CRITICA (3300).
+// Consumo usato: il piu' alto tra quello misurato (ultimi giorni) e il modello per l'intervallo attuale,
+// cosi' la data e' prudente.
+function iotRecharge(){
+  const iot = lastN('iot');
+  if (iot == null || !ROWS.length) return null;
+  const cs = new Date(CONFIG.CLEAN_START).getTime(), lastT = ROWS[ROWS.length-1].t.getTime();
+  const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= Math.max(cs, lastT - CONFIG.TREND_DAYS_IOT*DAY));
+  const fit = linfit(pts.map(p => ({ t:p.t, y:p.iot })));
+  const meas = fit && fit.spanDays >= 1.5 && fit.n >= 6 ? -fit.slope : null;
+  if (meas != null && meas <= 1) return { iot, charging:true };
+  const itv = detectInterval(), N = itv.N && itv.N >= 1 ? itv.N : null;
+  const mod = N ? model(N).total : null;
+  const rate = Math.max(meas || 0, mod || 0);
+  if (!rate) return { iot, rate:null };
+  const at = mv => new Date(lastT + Math.max(0, (iot - mv) / rate) * DAY);
+  const dAlert = at(CONFIG.IOT_ALERT), dCrit = at(CONFIG.IOT_CRIT);
+  return { iot, rate, meas, mod, N, src: meas != null && meas >= (mod || 0) ? 'misurato' : 'modello',
+    dAlert, dCrit, daysAlert: (dAlert - Date.now()) / DAY, daysCrit: (dCrit - Date.now()) / DAY };
+}
+const fmtDay = new Intl.DateTimeFormat('it-IT', { timeZone: CONFIG.TZ, weekday:'short', day:'2-digit', month:'2-digit' });
+const dayStr = d => fmtDay.format(d);   // "mar 14/10"
+
 function iotState(mv){
   if (mv == null) return { cls:'', badge:'' };
   if (mv >= 3700) return { cls:'good', badge:'<span class="badge ok">OK</span>' };

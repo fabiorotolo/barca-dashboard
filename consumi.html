@@ -6,7 +6,7 @@
 <title>Barca-IoT · Consumi e comandi</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
-<link rel="stylesheet" href="barca.css?v=20261007g">
+<link rel="stylesheet" href="barca.css?v=20261007h">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body>
@@ -52,9 +52,9 @@
 </div>
 <div id="toast"></div>
 
-<script src="chiavi-cifrate.js?v=20261007g"></script>
-<script src="cassaforte.js?v=20261007g"></script>
-<script src="barca.js?v=20261007g"></script>
+<script src="chiavi-cifrate.js?v=20261007h"></script>
+<script src="cassaforte.js?v=20261007h"></script>
+<script src="barca.js?v=20261007h"></script>
 <script>
 /* ---------- carte consumi ---------- */
 function boatCard(key, name, capLabel){
@@ -113,6 +113,16 @@ function renderConsumi(){
   let c2 = '<div class="card"><h3>Autonomia batteria IoT (senza ricarica)</h3>';
   if (iot == null) c2 += '<div class="row d">Nessun dato.</div>';
   else {
+    const rc = iotRecharge();
+    if (rc && rc.charging) c2 += `<div class="big" style="color:var(--ok)">In carica <small>tensione stabile o in salita</small></div>`;
+    else if (rc && rc.dAlert){
+      const col = rc.daysAlert <= 2 ? 'var(--danger)' : rc.daysAlert <= 5 ? 'var(--warn)' : 'var(--text-main)';
+      c2 += `<div class="row d" style="margin-bottom:2px">Ricarica consigliata entro</div>`;
+      c2 += `<div class="big" style="color:${col}">${rc.daysAlert <= 0 ? 'ORA' : dayStr(rc.dAlert)} <small>${rc.daysAlert <= 0 ? '' : '~' + daysStr(rc.daysAlert) + ' · '}a ${CONFIG.IOT_ALERT} mV</small></div>`;
+      c2 += `<div class="row">Critica (${CONFIG.IOT_CRIT} mV): <b>${dayStr(rc.dCrit)}</b> (~${daysStr(Math.max(0, rc.daysCrit))})</div>`;
+      c2 += `<div class="row d">Consumo usato: <b>${nf(rc.rate,1)} mV/giorno</b> (${rc.src}${rc.meas != null && rc.mod != null ? `; misurato ${nf(rc.meas,1)}, modello ${nf(rc.N,0)} h ${nf(rc.mod,1)}` : ''}): il più alto dei due, per prudenza.</div>`;
+      c2 += '<hr style="border:0;border-top:1px solid var(--line);margin:8px 0">';
+    }
     c2 += `<div class="row d">Da ${nf(iot,0)} mV (mediana ultime 3 letture) fino a:</div>`;
     c2 += '<div class="tbl-wrap"><table><tr><th>Invio</th><th>mV/g</th><th>a 3500 (alert)</th><th>a 3300 (critica)</th></tr>';
     for (const k of [3,6,12,24]){
