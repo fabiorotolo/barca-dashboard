@@ -6,7 +6,7 @@
 <title>Barca-IoT · Consumi e comandi</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
-<link rel="stylesheet" href="barca.css?v=20261008c">
+<link rel="stylesheet" href="barca.css?v=20261008d">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body>
@@ -52,10 +52,10 @@
 </div>
 <div id="toast"></div>
 
-<script src="chiavi-cifrate.js?v=20261008c"></script>
-<script src="cassaforte.js?v=20261008c"></script>
-<script src="nav.js?v=20261008c" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
-<script src="barca.js?v=20261008c"></script>
+<script src="chiavi-cifrate.js?v=20261008d"></script>
+<script src="cassaforte.js?v=20261008d"></script>
+<script src="nav.js?v=20261008d" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
+<script src="barca.js?v=20261008d"></script>
 <script>
 /* ---------- carte consumi ---------- */
 function boatCard(key, name, capLabel){
@@ -90,7 +90,7 @@ function renderConsumi(){
   const cs = new Date(CONFIG.CLEAN_START).getTime();
   const lastT = ROWS.length ? ROWS[ROWS.length-1].t.getTime() : Date.now();
   const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= Math.max(cs, lastT - CONFIG.TREND_DAYS_IOT*DAY));
-  const fit = linfit(pts.map(p => ({ t:p.t, y:p.iot })));
+  const fit = linfitRobusto(pts.map(p => ({ t:p.t, y:p.iot })));
   const N = itv.N && itv.N >= 1 ? itv.N : null;
   $('sub').textContent = N ? `intervallo attuale: ogni ${nf(N, itv.snapped ? 0 : 1)} h` : '';
 
@@ -105,14 +105,14 @@ function renderConsumi(){
     if (fit && fit.spanDays >= 1.5 && fit.n >= 6){
       const rate = -fit.slope;
       c1 += rate > 1
-        ? `<div class="row" style="margin-top:8px">Misurato ultimi ${CONFIG.TREND_DAYS_IOT} gg: <b>${nf(rate,1)} ± ${nf(fit.se,1)} mV/giorno</b></div>`
+        ? `<div class="row" style="margin-top:8px">Misurato ultimi ${CONFIG.TREND_DAYS_IOT} gg: <b>${nf(rate,1)} ± ${nf(fit.se,1)} mV/giorno</b>${fit.scartati ? ` <span class="d">(${fit.scartati} ${fit.scartati === 1 ? 'picco scartato' : 'picchi scartati'})</span>` : ''}</div>`
         : `<div class="row" style="margin-top:8px"><b>Non in scarica</b> (tensione stabile o in salita: ricarica in corso?)</div>`;
     } else c1 += `<div class="row d" style="margin-top:8px">Misura reale: dati insufficienti.</div>`;
   }
   const mis = Object.keys(MODEL.misure).map(Number).sort((a,b) => a-b)
     .map(k => `${k} h: <b>${nf(MODEL.misure[k].rate,1)}</b> (${nf(MODEL.misure[k].giorni,1)} gg)`).join(' · ');
   c1 += `<div class="note">Modello: consumo = ${nf(MODEL.P,2)} + (24/N) × ${nf(MODEL.E,3)} mV/giorno. ` +
-    (MODEL.auto ? `<b>Aggiornato automaticamente</b> dai periodi misurati: ${mis}.`
+    (MODEL.auto ? `<b>Aggiornato automaticamente</b> dai periodi misurati (almeno ${CONFIG.CAL_MIN_DAYS} giorni, picchi scartati): ${mis}.`
                 : `Valori iniziali (test di settembre-ottobre 2026): servono almeno due intervalli diversi misurati per ${CONFIG.CAL_MIN_DAYS} giorni.${mis ? ' Misurati finora: ' + mis + '.' : ''}`) + `</div></div>`;
 
   let c2 = '<div class="card"><h3>Autonomia batteria IoT (senza ricarica)</h3>';
@@ -151,7 +151,7 @@ function renderRateChart(){
   for (let i = 0; i < all.length; i++){
     const t = all[i].t.getTime();
     const win = all.filter(r => r.t.getTime() <= t && r.t.getTime() > t - 3*DAY);
-    const f = linfit(win.map(p => ({ t:p.t, y:p.iot })));
+    const f = linfitRobusto(win.map(p => ({ t:p.t, y:p.iot })));
     if (!f || f.spanDays < 2.5) continue;
     const gap = i > 0 ? (t - all[i-1].t.getTime())/3600000 : null;
     X.push(romeStr(all[i].t)); Y.push(-f.slope);
