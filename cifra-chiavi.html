@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Cifra chiavi</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔒</text></svg>">
+<style>
+  :root{ --bg:#1d1f26; --panel:#262932; --line:#3a3f4d; --text:#f4f4f7; --dim:#9aa0b0; --accent:#3d7cff; --ok:#4cd38a; --danger:#ff5c5c }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+  main{max-width:640px;margin:0 auto;padding:20px 16px;display:flex;flex-direction:column;gap:14px}
+  h1{margin:0;font-size:20px}
+  p,li{color:var(--dim);font-size:14px;line-height:1.5;margin:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+  label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--dim)}
+  input,textarea{background:#12141b;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:9px 10px;font:14px ui-monospace,Menlo,Consolas,monospace;width:100%}
+  textarea{height:150px;resize:vertical;font-size:12px}
+  button{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:10px 14px;font-size:14px;cursor:pointer}
+  button.sec{background:transparent;border:1px solid var(--line)}
+  .msg{font-size:13px}
+  .msg.ok{color:var(--ok)} .msg.err{color:var(--danger)}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main>
+  <h1>🔒 Cifra le chiavi delle dashboard</h1>
+  <p>Tutto avviene <b>in questo browser</b>: password e chiavi non vengono inviate da nessuna parte.
+     Il risultato è illeggibile senza password e va copiato nel file <code>chiavi-cifrate.js</code>
+     di <b>barca-dashboard</b> e di <b>meteo-dashboard</b> (stesso contenuto nei due).</p>
+
+  <form class="card" id="f">
+    <label>Password delle dashboard (almeno 12 caratteri)
+      <input id="pw" type="password" autocomplete="new-password" minlength="12" required></label>
+    <label>Ripeti la password
+      <input id="pw2" type="password" autocomplete="new-password" minlength="12" required></label>
+    <label>Barca – Read API Key (canale 3151316)<input data-k="barca" required></label>
+    <label>Meteo interno – Read API Key (canale 3152991)<input data-k="int" required></label>
+    <label>Meteo esterno ESP32_01 – Read API Key (canale 3181129)<input data-k="ext" required></label>
+    <label>Energia – Read API Key (canale 3489445)<input data-k="energia" required></label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="submit">Cifra</button>
+      <button type="button" class="sec" id="carica">Carica le chiavi attuali con la password</button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </form>
+
+  <div class="card" id="out" style="display:none">
+    <p>Contenuto completo di <code>chiavi-cifrate.js</code>:</p>
+    <textarea id="txt" readonly></textarea>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" id="copia">Copia</button>
+      <button type="button" class="sec" id="scarica">Scarica chiavi-cifrate.js</button>
+    </div>
+    <p>Su GitHub apri <code>chiavi-cifrate.js</code> in ciascun repository → matita ✏️ → sostituisci tutto → <b>Commit changes</b>.
+       Poi sui dispositivi, se richiesto, reinserisci la password.</p>
+  </div>
+
+  <p><a href="index.html">← Dashboard barca</a></p>
+</main>
+
+<script src="chiavi-cifrate.js"></script>
+<script src="cassaforte.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const msg = (t, cls) => { $('msg').textContent = t; $('msg').className = 'msg ' + (cls || ''); };
+
+// riempie i campi decifrando il file attuale (utile per cambiare una sola chiave o la password)
+$('carica').addEventListener('click', async () => {
+  try {
+    const k = await cassaforteApri($('pw').value);
+    document.querySelectorAll('[data-k]').forEach(i => { i.value = k[i.dataset.k] || ''; });
+    msg('Chiavi attuali caricate. Modifica quelle che vuoi e premi Cifra.', 'ok');
+  } catch (e) { msg('Password errata per il file attuale.', 'err'); }
+});
+
+$('f').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  if ($('pw').value !== $('pw2').value) return msg('Le due password non coincidono.', 'err');
+  const chiavi = {};
+  document.querySelectorAll('[data-k]').forEach(i => { chiavi[i.dataset.k] = i.value.trim(); });
+  msg('Cifratura…');
+  const blob = await cassaforteCifra($('pw').value, chiavi);
+  $('txt').value = '// Read API Key ThingSpeak CIFRATE (AES-GCM + PBKDF2). Senza password sono illeggibili.\n' +
+    '// Per rigenerarlo: apri cifra-chiavi.html, inserisci password e chiavi, copia qui il risultato.\n' +
+    '// File identico in barca-dashboard e meteo-dashboard.\n' +
+    'const CHIAVI_CIFRATE = ' + JSON.stringify(blob) + ';\n';
+  $('out').style.display = 'flex';
+  msg('Fatto. Copia il risultato qui sotto.', 'ok');
+});
+
+$('copia').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('txt').value); } catch (e) { $('txt').select(); document.execCommand('copy'); }
+  msg('Copiato.', 'ok');
+});
+$('scarica').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([$('txt').value], { type: 'text/javascript' }));
+  a.download = 'chiavi-cifrate.js'; a.click();
+});
+</script>
+</body>
+</html>
