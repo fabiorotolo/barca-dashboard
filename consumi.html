@@ -6,7 +6,7 @@
 <title>Barca-IoT · Consumi e comandi</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
-<link rel="stylesheet" href="barca.css?v=20261008d">
+<link rel="stylesheet" href="barca.css?v=20261008e">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body>
@@ -26,6 +26,18 @@
     <h2><span>Consumo batteria IoT nel tempo</span><span class="rng">mV/giorno · stima mobile sugli ultimi 3 giorni</span></h2>
     <div class="chart" id="ch-rate"></div>
     <div class="note">Ogni punto è la pendenza (regressione) delle letture dei 3 giorni precedenti, riportata a mV/giorno. Le righe tratteggiate sono i valori del modello a 3h e 6h: se i punti le seguono, il modello regge. Punti azzurri = invii ogni 6h, arancio = ogni 3h.</div>
+  </section>
+
+  <section class="panel block">
+    <h2><span>Deep sleep e risvegli: cosa determina la durata</span><span class="rng" id="split-sub"></span></h2>
+    <div class="duo">
+      <div><h3>Consumo al giorno per intervallo di invio</h3><div class="chart" id="ch-split"></div></div>
+      <div><h3>Come viene ricavato il modello dai dati</h3><div class="chart" id="ch-cal"></div></div>
+    </div>
+    <div class="note">A sinistra: ogni barra è il consumo giornaliero previsto, diviso tra <b>deep sleep</b> (fisso, uguale per ogni intervallo)
+      e <b>risvegli</b> (cresce con il numero di invii al giorno); accanto, i giorni fino a 3500 mV (ALERT). * = intervallo non ancora misurato. A destra: ogni punto pieno è un periodo
+      misurato; la retta che li unisce incrocia lo zero nel consumo di deep sleep, e la pendenza è il costo di un risveglio.
+      I cerchi vuoti sono gli intervalli non ancora misurati.</div>
   </section>
 
   <section class="panel block">
@@ -52,10 +64,10 @@
 </div>
 <div id="toast"></div>
 
-<script src="chiavi-cifrate.js?v=20261008d"></script>
-<script src="cassaforte.js?v=20261008d"></script>
-<script src="nav.js?v=20261008d" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
-<script src="barca.js?v=20261008d"></script>
+<script src="chiavi-cifrate.js?v=20261008e"></script>
+<script src="cassaforte.js?v=20261008e"></script>
+<script src="nav.js?v=20261008e" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
+<script src="barca.js?v=20261008e"></script>
 <script>
 /* ---------- carte consumi ---------- */
 function boatCard(key, name, capLabel){
@@ -101,7 +113,7 @@ function renderConsumi(){
     const m = model(N), pS = m.sleep/m.total*100, pW = m.work/m.total*100;
     c1 += `<div class="big">${nf(m.total,1)} <small>mV/giorno (modello)</small></div>`;
     c1 += `<div class="bar"><div class="sl" style="width:${pS}%">${nf(pS,0)}%</div><div class="wk" style="width:${pW}%">${nf(pW,0)}%</div></div>`;
-    c1 += `<div class="legend"><i style="background:#6aa6ff"></i>Deep sleep ${nf(m.sleep,1)} mV/g &nbsp; <i style="background:#ffb84d"></i>Lavoro ${nf(m.work,1)} mV/g (${nf(24/N,0)} cicli × ${nf(CONFIG.E_CICLO,2)} mV)</div>`;
+    c1 += `<div class="legend"><i style="background:#4a86e0"></i>Deep sleep ${nf(m.sleep,1)} mV/g &nbsp; <i style="background:#c47d1f"></i>Risvegli ${nf(m.work,1)} mV/g (${nf(24/N,0)} cicli × ${nf(CONFIG.E_CICLO,2)} mV)</div>`;
     if (fit && fit.spanDays >= 1.5 && fit.n >= 6){
       const rate = -fit.slope;
       c1 += rate > 1
@@ -179,6 +191,68 @@ function renderRateChart(){
   }, { displayModeBar:false, responsive:true });
 }
 
+/* ---------- deep sleep e risvegli ---------- */
+const C_SLEEP = '#4a86e0', C_WORK = '#c47d1f', C_TXT = '#c7cbd6', C_DIM = '#8d93a5', C_SURF = '#262932';
+function renderSplit(){
+  const small = innerWidth <= 600, iot = lastN('iot'), cur = detectInterval().N;
+  const Ns = [3, 6, 12, 24];
+  $('split-sub').textContent = `consumo = ${nf(MODEL.P,1)} + (cicli al giorno) × ${nf(MODEL.E,2)} mV · ${MODEL.auto ? 'calcolato dai dati' : 'valori iniziali'}`;
+  const base = { autosize:true, separators:',.', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+    font:{ color:C_TXT, size: small ? 10 : 11 }, showlegend:true, hovermode:'closest', dragmode:false,
+    legend:{ orientation:'h', x:0, y:1.13, traceorder:'normal', font:{ size:10, color:C_TXT } } };
+  const cfg = { displayModeBar:false, responsive:true, scrollZoom:false };
+
+  // 1) barre impilate: deep sleep + risvegli per ogni intervallo, con i giorni fino ad ALERT
+  const y = Ns.map(N => `ogni ${N} h` + (MODEL.misure[N] ? '' : ' *')), tot = Ns.map(N => model(N).total);
+  const xmax = Math.max(...tot) * (small ? 1.75 : 1.55);
+  const ann = Ns.map((N, i) => {
+    const d = iot != null ? (iot - CONFIG.IOT_ALERT) / tot[i] : null;
+    return { x: tot[i], y: y[i], xanchor:'left', xshift:6, showarrow:false, font:{ size:11, color: N === cur ? '#fff' : C_TXT },
+      text: `${N === cur ? '<b>' : ''}${nf(tot[i],1)} mV/g${d != null ? ' · ' + daysStr(Math.max(0,d)) : ''}${N === cur ? '</b> ◀ attuale' : ''}` };
+  });
+  Plotly.react($('ch-split'), [
+    { type:'bar', orientation:'h', name:'Deep sleep', y, x: Ns.map(N => model(N).sleep),
+      marker:{ color:C_SLEEP, line:{ color:C_SURF, width:2 } }, hovertemplate:'%{y}<br>Deep sleep: <b>%{x:.1f} mV/g</b><extra></extra>' },
+    { type:'bar', orientation:'h', name:'Risvegli', y, x: Ns.map(N => model(N).work),
+      marker:{ color:C_WORK, line:{ color:C_SURF, width:2 } },
+      customdata: Ns.map(N => 24/N), hovertemplate:'%{y}<br>Risvegli: <b>%{x:.1f} mV/g</b> (%{customdata} al giorno)<extra></extra>' }
+  ], Object.assign({}, base, {
+    barmode:'stack', bargap:0.35, margin:{ l: small ? 62 : 70, r:8, t:26, b:30 }, annotations: ann,
+    xaxis:{ range:[0, xmax], gridcolor:'#3a3f4d', zeroline:false, ticksuffix:'', title:{ text:'mV/giorno' + (iot != null ? `   ·   giorni fino a ${CONFIG.IOT_ALERT} mV` : ''), font:{ size:10, color:C_DIM } } },
+    yaxis:{ autorange:'reversed', fixedrange:true, tickfont:{ size:11, color:C_TXT } }
+  }), cfg);
+
+  // 2) retta del modello: consumo misurato di ogni periodo contro i risvegli al giorno
+  const xl = [0, 8.6];
+  const mis = Ns.filter(N => MODEL.misure[N]), nonMis = Ns.filter(N => !MODEL.misure[N]);
+  const lbl = N => `${N} h`;
+  Plotly.react($('ch-cal'), [
+    { type:'scatter', mode:'lines', name:'Modello', x: xl, y: xl.map(c => MODEL.P + c*MODEL.E), line:{ color:C_DIM, width:2, dash:'dot' },
+      hovertemplate:'%{x:.1f} risvegli/giorno → <b>%{y:.1f} mV/g</b><extra>modello</extra>' },
+    { type:'scatter', mode:'markers+text', name:'Misurato', x: mis.map(N => 24/N), y: mis.map(N => MODEL.misure[N].rate),
+      text: mis.map(lbl), textposition:'top left', textfont:{ size:11, color:C_TXT },
+      marker:{ size:11, color:'#e7e9ef', line:{ color:C_SURF, width:2 } },
+      customdata: mis.map(N => [MODEL.misure[N].giorni, MODEL.misure[N].n]),
+      hovertemplate:'ogni %{text}: <b>%{y:.1f} mV/g</b><br>misurato su %{customdata[0]:.1f} giorni (%{customdata[1]} letture)<extra></extra>' },
+    { type:'scatter', mode:'markers+text', name:'Previsto (non misurato)', x: nonMis.map(N => 24/N), y: nonMis.map(N => model(N).total),
+      text: nonMis.map(lbl), textposition:'bottom right', textfont:{ size:11, color:C_DIM },
+      marker:{ size:10, color:'rgba(0,0,0,0)', line:{ color:C_DIM, width:2 } },
+      hovertemplate:'ogni %{text}: <b>%{y:.1f} mV/g</b> (previsto)<extra></extra>' },
+    { type:'scatter', mode:'markers', name:'Deep sleep', x:[0], y:[MODEL.P], marker:{ size:11, color:C_SLEEP, line:{ color:C_SURF, width:2 } },
+      hovertemplate:'Solo deep sleep: <b>%{y:.1f} mV/g</b><extra></extra>', showlegend:false }
+  ], Object.assign({}, base, {
+    margin:{ l: small ? 36 : 44, r:10, t:26, b:30 },
+    annotations:[
+      { x:0, y:MODEL.P, xanchor:'left', yanchor:'top', xshift:8, yshift:-4, showarrow:false, font:{ size:11, color:C_TXT },
+        text:`deep sleep <b>${nf(MODEL.P,1)}</b> mV/g` },
+      { x: small ? 8.6 : 6.2, y: MODEL.P + (small ? 7 : 6.2)*MODEL.E, xanchor: small ? 'right' : 'left', yanchor:'top', xshift:6, yshift: small ? -14 : -6, showarrow:false, font:{ size:11, color:C_TXT },
+        text:`+<b>${nf(MODEL.E,2)}</b> mV per risveglio` }
+    ],
+    xaxis:{ range:[-0.3, 8.9], dtick:1, gridcolor:'#3a3f4d', zeroline:false, fixedrange:true, title:{ text:'risvegli al giorno', font:{ size:10, color:C_DIM } } },
+    yaxis:{ rangemode:'tozero', gridcolor:'#3a3f4d', zeroline:false, fixedrange:true, title: small ? undefined : { text:'mV/giorno', font:{ size:10, color:C_DIM } } }
+  }), cfg);
+}
+
 /* ---------- comandi ---------- */
 const COMMANDS = [
   { c:'STATUS', x:'Stato completo della scheda: batterie, GPS, ultimo invio.' },
@@ -242,7 +316,7 @@ $('dl').addEventListener('click', () => {
 async function refresh(){
   try {
     await loadData(); clearError();
-    renderConsumi(); renderRateChart(); renderCommands(); renderGps();
+    renderConsumi(); renderRateChart(); renderSplit(); renderCommands(); renderGps();
     $('f-count').textContent = `${ROWS.length} letture · prima: ${ROWS.length ? fmtFull(ROWS[0].t) : '--'}`;
     $('f-upd').textContent = 'Pagina aggiornata: ' + fmtShort(new Date());
   } catch (e){ showError(e); }

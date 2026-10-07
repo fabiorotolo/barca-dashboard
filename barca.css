@@ -68,7 +68,11 @@ a{color:var(--accent)}
 .row.d,.d{color:var(--text-dim)}
 .bar{display:flex;height:22px;border-radius:6px;overflow:hidden;margin:8px 0 4px;background:#1b1d24}
 .bar div{display:flex;align-items:center;justify-content:center;font:600 11px var(--mono);color:#0d1018;white-space:nowrap;overflow:hidden}
-.bar .sl{background:#6aa6ff}.bar .wk{background:#ffb84d}
+.bar .sl{background:#4a86e0}.bar .wk{background:#c47d1f}
+.bar div{color:#fff}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.duo .chart{height:250px}
+.duo h3{margin:0 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);font-weight:600}
 .legend{font-size:12px;color:var(--text-dim)}
 .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 .note{font-size:12px;color:var(--text-dim);margin-top:8px;line-height:1.45}
@@ -110,6 +114,7 @@ tr.hl td{background:rgba(61,124,255,.16)}
   .bottombar{grid-template-columns:1fr}
   .bottombar .ranges,.bottombar .navs{justify-content:flex-start}
   .cons-grid{grid-template-columns:1fr}
+  .duo{grid-template-columns:1fr}
   .tile .val{font-size:22px}
   th,td{padding:5px 5px}
   th{white-space:normal;line-height:1.15}
