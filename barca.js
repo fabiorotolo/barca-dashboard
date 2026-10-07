@@ -146,13 +146,16 @@ function lastN(key, n = 3){
   const v = ROWS.filter(r => r[key] != null).slice(-n).map(r => r[key]);
   return v.length ? median(v) : null;
 }
+// Intervallo di invio dagli ultimi 3 valori (2 intervalli): si prende il piu' breve, perche' un invio
+// saltato puo' solo allungare un intervallo; se e' vicino (±20%) a 3, 6, 12 o 24 h e' quello.
+// Dopo un cambio di INTERVALLO il nuovo valore compare dopo 2 invii.
 function detectInterval(){
-  const r = ROWS.slice(-13), diffs = [];
+  const r = ROWS.slice(-3), diffs = [];
   for (let i = 1; i < r.length; i++) diffs.push((r[i].t - r[i-1].t)/3600000);
-  const med = median(diffs);
-  if (med == null) return { raw:null, N:null };
-  const snap = [3,6,12,24].find(k => Math.abs(med-k)/k < 0.2);
-  return { raw: med, N: snap || med, snapped: !!snap };
+  if (!diffs.length) return { raw:null, N:null };
+  const min = Math.min(...diffs);
+  const snap = [3,6,12,24].find(k => Math.abs(min-k)/k < 0.2);
+  return { raw: min, N: snap || min, snapped: !!snap };
 }
 // Quando ricaricare la batteria IoT: giorni fino a ALERT (3500) e CRITICA (3300).
 // Consumo usato: il piu' alto tra quello misurato (ultimi giorni) e il modello per l'intervallo attuale,
