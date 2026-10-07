@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="barca.css?v=20261008r">
+<link rel="stylesheet" href="barca.css?v=20261008s">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
@@ -18,7 +18,7 @@
     <div class="tile" id="t-v1"><div class="hd"><span>Batteria Motore</span><span class="tag"></span></div><div class="val mono">--</div></div>
     <div class="tile" id="t-v2"><div class="hd"><span>Batteria Servizi</span><span class="tag"></span></div><div class="val mono">--</div></div>
     <div class="tile center"><div class="hd"><span>Ora locale</span><span class="tag"></span></div><div class="val mono" id="clock">--:--:--</div></div>
-    <div class="tile" id="t-iot"><div class="hd"><span>Batteria IoT</span><span class="tag"></span></div><div class="val mono">--</div></div>
+    <div class="tile" id="t-iot"><div class="hd"><span>Batteria IoT</span><span class="tag"></span></div><div class="val mono">--</div><div class="sub"></div></div>
     <div class="tile" id="t-last"><div class="hd"><span>Ultimo dato</span><span class="tag"></span></div><div class="val mono">--</div></div>
   </div>
 
@@ -55,7 +55,7 @@
 <script src="chiavi-cifrate.js?v=20261008d"></script>
 <script src="cassaforte.js?v=20261008d"></script>
 <script src="nav.js?v=20261008d" data-repo="barca" data-pagina="barca" data-dove=".navs"></script>
-<script src="barca.js?v=20261008n"></script>
+<script src="barca.js?v=20261008r"></script>
 <script>
 function setTile(id, cls, val, unit, tag){
   const el = $(id);
@@ -77,7 +77,8 @@ function renderTiles(){
   let rcTag = '';
   if (rc && rc.charging) rcTag = 'in carica';
   else if (rc && rc.dAlert) rcTag = rc.daysAlert <= 0 ? '<b>ricarica ora</b>' : `ricarica entro <b>${dayStr(rc.dAlert).replace(/^\S+ /,'')}</b>`;
-  setTile('t-iot', st.cls, nf(iot,0), 'mV', (rcTag ? rcTag + ' ' : '') + st.badge);
+  setTile('t-iot', st.cls, nf(iot,0), 'mV', (rcTag ? `<span class="rc">${rcTag}</span> ` : '') + st.badge);
+  $('t-iot').querySelector('.sub').innerHTML = rcTag;   // su telefono la data di ricarica va sotto il valore
   if (rc && rc.dAlert) $('t-iot').title = `Ricaricare entro ${dayStr(rc.dAlert)} (~${daysStr(rc.daysAlert)}): a ${CONFIG.IOT_ALERT} mV con ${nf(rc.rate,1)} mV/giorno (${rc.src}). Critica (${CONFIG.IOT_CRIT} mV): ${dayStr(rc.dCrit)}.`;
 
   const itv = detectInterval(), last = ROWS[ROWS.length-1];
