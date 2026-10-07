@@ -110,10 +110,13 @@ function renderConsumi(){
   if (!N){
     c1 += '<div class="row d">Intervallo non rilevabile o troppo breve (modalità test): modello non applicabile.</div>';
   } else {
-    const m = model(N), pS = m.sleep/m.total*100, pW = m.work/m.total*100;
-    c1 += `<div class="big">${nf(m.total,1)} <small>mV/giorno (modello)</small></div>`;
+    // consumo previsto per l'intervallo attuale (misurato se disponibile, altrimenti master),
+    // diviso tra deep sleep del master e risvegli (il resto)
+    const tot = previsto(N), sl = Math.min(CONFIG.MASTER.P, tot), m = { total: tot, sleep: sl, work: tot - sl };
+    const pS = m.sleep/m.total*100, pW = m.work/m.total*100;
+    c1 += `<div class="big">${nf(m.total,1)} <small>mV/giorno (${fontePrevisto(N)}, ogni ${nf(N,0)} h)</small></div>`;
     c1 += `<div class="bar"><div class="sl" style="width:${pS}%">${nf(pS,0)}%</div><div class="wk" style="width:${pW}%">${nf(pW,0)}%</div></div>`;
-    c1 += `<div class="legend"><i style="background:#4a86e0"></i>Deep sleep ${nf(m.sleep,1)} mV/g &nbsp; <i style="background:#c47d1f"></i>Risvegli ${nf(m.work,1)} mV/g (${nf(24/N,0)} cicli × ${nf(CONFIG.E_CICLO,2)} mV)</div>`;
+    c1 += `<div class="legend"><i style="background:#4a86e0"></i>Deep sleep ${nf(m.sleep,1)} mV/g &nbsp; <i style="background:#c47d1f"></i>Risvegli ${nf(m.work,1)} mV/g (${nf(24/N,0)} cicli × ${nf(m.work/(24/N),2)} mV)</div>`;
     if (fit && fit.spanDays >= 1.5 && fit.n >= 6){
       const rate = -fit.slope;
       c1 += rate > 1
@@ -127,9 +130,8 @@ function renderConsumi(){
   }
   const mis = Object.keys(MODEL.misure).map(Number).sort((a,b) => a-b)
     .map(k => `${k} h: <b>${nf(MODEL.misure[k].rate,1)}</b> (${nf(MODEL.misure[k].giorni,1)} gg)`).join(' · ');
-  c1 += `<div class="note">Modello: consumo = ${nf(MODEL.P,2)} + (24/N) × ${nf(MODEL.E,3)} mV/giorno. ` +
-    (MODEL.auto ? `<b>Aggiornato automaticamente</b> dai periodi misurati (almeno ${CONFIG.CAL_MIN_DAYS} giorni, picchi scartati): ${mis}.`
-                : `Valori iniziali (test di settembre-ottobre 2026): servono almeno due intervalli diversi misurati per ${CONFIG.CAL_MIN_DAYS} giorni.${mis ? ' Misurati finora: ' + mis + '.' : ''}`) + `</div></div>`;
+  c1 += `<div class="note">Previsione: intervalli misurati (almeno ${CONFIG.CAL_MIN_DAYS} giorni, picchi scartati) = consumo reale${mis ? ' (' + mis + ')' : ''}; ` +
+    `gli altri = <b>master</b> fisso ${nf(CONFIG.MASTER.P,2)} + (24/N) × ${nf(CONFIG.MASTER.E,3)} mV/giorno.</div></div>`;
 
   let c2 = '<div class="card"><h3>Autonomia batteria IoT (senza ricarica)</h3>';
   if (iot == null) c2 += '<div class="row d">Nessun dato.</div>';
