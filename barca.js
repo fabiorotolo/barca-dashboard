@@ -19,9 +19,7 @@ const CONFIG = {
 
   // soglie batterie barca (AGM 12 V): ALERT ~50%, CRITICA ~10%
   BOAT_ALERT: 12.2, BOAT_CRIT: 11.8,
-  // la linea ALERT compare quando la tensione minima del periodo scende sotto BOAT_NEAR;
-  // la linea CRITICA solo quando si arriva al livello ALERT
-  BOAT_NEAR: 12.4,
+  // la linea ALERT e' sempre visibile; la CRITICA compare quando la tensione arriva al livello ALERT
 
   // capacità batterie barca (Ah) — Motore da confermare
   CAP_AH: { v1: 80, v2: 160 },
@@ -214,7 +212,7 @@ function plotSeries(divId, rngId, key, color, unit, dec, opts = {}){
   let lo = ymin, hi = ymax;
   if (opts.thresholds && ymin < opts.thresholds.nearBelow){
     for (const th of opts.thresholds.lines){
-      if (th.below != null && ymin >= th.below) continue;   // linea mostrata solo vicino alla soglia
+      if (th.below != null && ymin > th.below) continue;   // linea mostrata solo quando i valori arrivano a 'below'
       shapes.push({ type:'line', xref:'paper', x0:0, x1:1, yref:'y', y0:th.v, y1:th.v, line:{color:th.c, width:1, dash:'dot'} });
       annots.push({ xref:'paper', x:0.995, xanchor:'right', yref:'y', y:th.v, yanchor:'bottom', text:th.t, showarrow:false, font:{size:10, color:th.c} });
       lo = Math.min(lo, th.v);
