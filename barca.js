@@ -19,7 +19,8 @@ const CONFIG = {
   // finche' non ci sono almeno due intervalli diversi misurati (test 6h e 3h di settembre-ottobre 2026).
   P_SLEEP: 12.72,   // mV/giorno consumati dal solo deep sleep
   E_CICLO: 1.863,   // mV consumati da ogni ciclo di lavoro (risveglio, rete, GPS, invii)
-  CAL_MIN_DAYS: 1.5, CAL_MIN_POINTS: 6,   // periodo minimo per misurare il consumo di un intervallo
+  CAL_MIN_DAYS: 5, CAL_MIN_POINTS: 6,   // periodo minimo per misurare il consumo di un intervallo
+  PICCO_MV: 6,      // scarto minimo (mV) dalla tendenza oltre cui una lettura IoT e' un picco da scartare
 
   // soglie batterie barca (AGM 12 V): ALERT ~50%, CRITICA ~10%
   BOAT_ALERT: 12.2, BOAT_CRIT: 11.8,
@@ -80,6 +81,26 @@ function linfit(pts){ // pts = [{t:Date, y:number}]
   const se = n > 2 ? Math.sqrt(sse/(n-2)/sxx) : null;
   return { slope, se, n, spanDays: xs[n-1]-xs[0] };
 }
+// Come linfit, ma scarta i picchi: ogni lettura viene confrontata con il valore atteso dalla retta
+// delle 2 letture precedenti e delle 2 successive (tiene conto dei tempi); se se ne discosta piu' di
+// 3 volte la dispersione tipica (MAD), e comunque piu' di PICCO_MV, e' un picco e non entra nel calcolo.
+// Le prime e le ultime 2 letture non vengono mai scartate (manca il confronto da un lato).
+function linfitRobusto(pts, minScarto = CONFIG.PICCO_MV){
+  if (pts.length < 7) return linfit(pts);
+  const dev = pts.map((p,i) => {
+    if (i < 2 || i > pts.length-3) return 0;
+    const v = [pts[i-2], pts[i-1], pts[i+1], pts[i+2]], f = linfit(v);
+    if (!f) return 0;
+    const t0 = v[0].t.getTime(), xs = v.map(q => (q.t.getTime()-t0)/DAY);
+    const mx = xs.reduce((a,b)=>a+b,0)/4, my = v.reduce((a,q)=>a+q.y,0)/4;
+    return p.y - (my + f.slope*((p.t.getTime()-t0)/DAY - mx));
+  });
+  const mad = median(dev.slice(2, -2).map(Math.abs));
+  const soglia = Math.max(3 * 1.4826 * mad, minScarto);
+  const buoni = pts.filter((p,i) => Math.abs(dev[i]) <= soglia);
+  const f = linfit(buoni);
+  return f ? Object.assign(f, { scartati: pts.length - buoni.length }) : linfit(pts);
+}
 function haversine(a,b){
   const R = 6371000, r = x => x*Math.PI/180;
   const dLat = r(b.lat-a.lat), dLon = r(b.lon-a.lon);
@@ -110,7 +131,7 @@ function calibraModello(){
   }
   const misure = {};
   for (const s of seg){
-    const f = linfit(s.pts.map(p => ({ t:p.t, y:p.iot })));
+    const f = linfitRobusto(s.pts.map(p => ({ t:p.t, y:p.iot })));
     if (!f || f.spanDays < CONFIG.CAL_MIN_DAYS || f.n < CONFIG.CAL_MIN_POINTS) continue;
     const m = misure[s.N] || (misure[s.N] = { w:0, sum:0, n:0 });
     m.w += f.spanDays; m.sum += -f.slope * f.spanDays; m.n += f.n;
@@ -208,7 +229,7 @@ function iotRecharge(){
   if (iot == null || !ROWS.length) return null;
   const cs = new Date(CONFIG.CLEAN_START).getTime(), lastT = ROWS[ROWS.length-1].t.getTime();
   const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= Math.max(cs, lastT - CONFIG.TREND_DAYS_IOT*DAY));
-  const fit = linfit(pts.map(p => ({ t:p.t, y:p.iot })));
+  const fit = linfitRobusto(pts.map(p => ({ t:p.t, y:p.iot })));
   const meas = fit && fit.spanDays >= 1.5 && fit.n >= 6 ? -fit.slope : null;
   if (meas != null && meas <= 1) return { iot, charging:true };
   const itv = detectInterval(), N = itv.N && itv.N >= 1 ? itv.N : null;
