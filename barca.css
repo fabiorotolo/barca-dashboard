@@ -116,7 +116,7 @@ tr.hl td{background:rgba(61,124,255,.16)}
 @media (max-width:900px), (max-height:619px){
   .topbar{grid-template-columns:1fr 1fr}
   .tile.center{order:5;grid-column:1 / -1}
-  .tile.center .val{text-align:left}
+  .tile.center .val{text-align:center}
   .center-grid{grid-template-columns:1fr;grid-template-rows:none}
   .center-grid .panel{height:300px}
   .center-grid .panel.map{height:400px}
