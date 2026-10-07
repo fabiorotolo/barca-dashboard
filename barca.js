@@ -108,7 +108,7 @@ async function loadData(){
   const j = res.ok ? await res.json() : null;
   if (res.status === 400 || res.status === 401 || res.status === 403 || j === -1 || (j && !j.feeds)){
     try { localStorage.removeItem(CASSAFORTE_BARCA); } catch(e){}
-    askKey('La chiave ThingSpeak salvata non funziona più (rigenerata?). Inserisci la password; se il problema resta, aggiorna chiavi-cifrate.js con cifra-chiavi.html.');
+    askKey('La chiave ThingSpeak salvata non funziona più (rigenerata?). Inserisci la password; se il problema resta, le chiavi sono state rigenerate: <a href="cifra-chiavi.html" style="color:#6aa6ff">aggiorna le chiavi</a>.');
     throw new LoginNeeded('chiave non valida');
   }
   if (!res.ok) throw new Error('HTTP ' + res.status);

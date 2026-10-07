@@ -36,10 +36,10 @@
       <input id="pw" type="password" autocomplete="new-password" minlength="12" required></label>
     <label>Ripeti la password
       <input id="pw2" type="password" autocomplete="new-password" minlength="12" required></label>
-    <label>Barca – Read API Key (canale 3151316)<input data-k="barca" required></label>
-    <label>Meteo interno – Read API Key (canale 3152991)<input data-k="int" required></label>
-    <label>Meteo esterno ESP32_01 – Read API Key (canale 3181129)<input data-k="ext" required></label>
-    <label>Energia – Read API Key (canale 3489445)<input data-k="energia" required></label>
+    <label>1. meteo_data – Read API Key (canale 3152991)<input data-k="int" required autocomplete="off"></label>
+    <label>2. ESP32_01 – Read API Key (canale 3181129)<input data-k="ext" required autocomplete="off"></label>
+    <label>3. Energy_Cloud – Read API Key (canale 3489445)<input data-k="energia" required autocomplete="off"></label>
+    <label>4. Barca-IoT – Read API Key (canale 3151316)<input data-k="barca" required autocomplete="off"></label>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button type="submit">Cifra</button>
       <button type="button" class="sec" id="carica">Carica le chiavi attuali con la password</button>
@@ -54,11 +54,12 @@
       <button type="button" id="copia">Copia</button>
       <button type="button" class="sec" id="scarica">Scarica chiavi-cifrate.js</button>
     </div>
-    <p>Su GitHub apri <code>chiavi-cifrate.js</code> in ciascun repository → matita ✏️ → sostituisci tutto → <b>Commit changes</b>.
-       Poi sui dispositivi, se richiesto, reinserisci la password.</p>
+    <p>Incolla il risultato nella chat con Claude, che lo carica in barca-dashboard e meteo-dashboard. Oppure su GitHub apri
+       <code>chiavi-cifrate.js</code> in ciascun repository → matita ✏️ → sostituisci tutto → <b>Commit changes</b>.
+       Dopo un paio di minuti apri una dashboard e, se richiesto, reinserisci la password.</p>
   </div>
 
-  <p><a href="index.html">← Dashboard barca</a></p>
+  <p><a href="index.html">← Barca</a> · <a href="https://fabiorotolo.github.io/meteo-dashboard/index.html">← Meteo</a></p>
 </main>
 
 <script src="chiavi-cifrate.js"></script>
