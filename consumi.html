@@ -31,11 +31,11 @@
   <section class="panel block">
     <h2><span>Deep sleep e risvegli: cosa determina la durata</span><span class="rng" id="split-sub"></span></h2>
     <div class="duo">
-      <div><h3>Master per intervallo · ◆ = misurato</h3><div class="chart" id="ch-split"></div></div>
+      <div><h3>Consumo in 24 ore: deep sleep + risvegli · ◆ = misurato</h3><div class="chart" id="ch-split"></div></div>
       <div><h3>Come è ricavato il master · confronto con le misure</h3><div class="chart" id="ch-cal"></div></div>
     </div>
     <div class="note">Il <b>master</b> è il consumo "pulito" di riferimento, fisso: calcolato da periodi di almeno 5 giorni senza consumi anomali (6 h dal 22 al 28/09, 5,8 giorni; 3 h dal 28/09 al 03/10, 5,3 giorni).
-      A sinistra: le barre sono il master per ogni intervallo, diviso tra <b>deep sleep</b> e <b>risvegli</b>, con i giorni fino a 3500 mV; il rombo è il consumo misurato.
+      A sinistra: ogni barra è quanto consuma la scheda in <b>24 ore</b> a quell'intervallo: la parte <b>blu</b> è il deep sleep (sempre uguale), la parte <b>arancio</b> sono i risvegli (numero di risvegli al giorno × costo di un risveglio); a destra della barra il conto per esteso. Il rombo è il consumo misurato (dettagli passando sopra); i giorni di autonomia sono nella tabella in alto.
       A destra: il triangolo arancio tra i due riferimenti dà il costo di un risveglio; prolungando fino a 0 risvegli resta il deep sleep (fascia blu).
       I rombi sono i periodi misurati: se si scostano dal master più del 15% diventano <b style="color:var(--danger)">rossi</b> (consumo extra: GPS, rete, caldo…) o <b style="color:var(--ok)">verdi</b>.</div>
   </section>
@@ -67,7 +67,7 @@
 <script src="chiavi-cifrate.js?v=20261008h"></script>
 <script src="cassaforte.js?v=20261008h"></script>
 <script src="nav.js?v=20261008h" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
-<script src="barca.js?v=20261008n"></script>
+<script src="barca.js?v=20261008o"></script>
 <script>
 /* ---------- carte consumi ---------- */
 function boatCard(key, name, capLabel){
@@ -211,29 +211,32 @@ function renderSplit(){
   const cfg = { displayModeBar:false, responsive:true, scrollZoom:false };
   const pctTxt = p => `${p >= 0 ? '+' : ''}${nf(p,0)}%`;
 
-  // 1) barre impilate del MASTER (deep sleep + risvegli); rombo = consumo misurato, se c'e'
-  const y = Ns.map(N => `ogni ${N} h`), tot = Ns.map(master);
+  // 1) consumo di 24 ore per ogni intervallo (master): deep sleep + risvegli, scritto per esteso
+  const y = Ns.map(N => `<b>ogni ${N} h</b><br><span style="font-size:10px;color:${C_DIM}">${24/N} ${24/N === 1 ? 'risveglio' : 'risvegli'}/giorno</span>`);
+  const tot = Ns.map(master), wk = Ns.map(N => 24/N*mE);
   const mis = Ns.map(N => MODEL.misure[N] ? MODEL.misure[N].rate : null);
-  const xmax = Math.max(...tot, ...mis.filter(v => v != null)) * (small ? 1.9 : 1.7);
-  const ann = Ns.map((N, i) => {
-    const d = iot != null ? (iot - CONFIG.IOT_ALERT) / previsto(N) : null, pct = mis[i] != null ? scostamento(mis[i], tot[i]) : null;
-    const col = fuoriMaster(pct) ? (pct > 0 ? '#ff7b7b' : '#4cd38a') : (N === cur ? '#fff' : C_TXT);
-    return { x: Math.max(tot[i], mis[i] || 0), y: y[i], xanchor:'left', xshift:8, showarrow:false, font:{ size:11, color: col },
-      text: `${N === cur ? '<b>' : ''}${nf(tot[i],1)}${d != null ? ' · ' + daysStr(Math.max(0,d)) + (mis[i] != null ? '*' : '') : ''}${N === cur ? '</b> ◀' : ''}` +
-            (pct != null ? `<br>misurato ${nf(mis[i],1)} (${pctTxt(pct)})${fuoriMaster(pct) && pct > 0 ? ' ⚠' : ''}` : '<br><span style="color:#8d93a5">non ancora misurato</span>') };
-  });
+  const xmax = Math.max(...tot) * (small ? 2.35 : 2.05);
+  const ann = Ns.map((N, i) => ({
+    x: Math.max(tot[i], mis[i] || 0), y: y[i], xanchor:'left', xshift:10, showarrow:false, align:'left',
+    font:{ size: small ? 10 : 11, color: N === cur ? '#fff' : C_TXT },
+    text: `<span style="color:#7fb0ff">${nf(mP,1)}</span> + <span style="color:#e3a24a">${nf(wk[i],1)}</span> = <b>${nf(tot[i],1)} mV</b>` +
+          `${N === cur ? '  ◀ attuale' : ''}`
+  }));
   Plotly.react($('ch-split'), [
-    { type:'bar', orientation:'h', name:'Deep sleep', y, x: Ns.map(() => mP),
-      marker:{ color:C_SLEEP, line:{ color:C_SURF, width:2 } }, hovertemplate:'%{y}<br>Deep sleep (master): <b>%{x:.1f} mV/g</b><extra></extra>' },
-    { type:'bar', orientation:'h', name:'Risvegli', y, x: Ns.map(N => 24/N*mE),
+    { type:'bar', orientation:'h', name:'Deep sleep (24 h)', y, x: Ns.map(() => mP),
+      marker:{ color:C_SLEEP, line:{ color:C_SURF, width:2 } },
+      hovertemplate:'%{y}<br>Deep sleep in 24 h: <b>%{x:.1f} mV</b><extra></extra>' },
+    { type:'bar', orientation:'h', name:'Risvegli (24 h)', y, x: wk,
       marker:{ color:C_WORK, line:{ color:C_SURF, width:2 } },
-      customdata: Ns.map(N => 24/N), hovertemplate:'%{y}<br>Risvegli (master): <b>%{x:.1f} mV/g</b> (%{customdata} al giorno)<extra></extra>' },
+      customdata: Ns.map(N => [24/N, mE]), hovertemplate:'%{y}<br>Risvegli in 24 h: <b>%{x:.1f} mV</b> (%{customdata[0]} × %{customdata[1]:.2f} mV)<extra></extra>' },
     { type:'scatter', mode:'markers', name:'Misurato', y: y.filter((_, i) => mis[i] != null), x: mis.filter(v => v != null),
-      marker:{ symbol:'diamond', size:12, color:'#e7e9ef', line:{ color:C_SURF, width:2 } },
-      hovertemplate:'%{y}<br>Misurato: <b>%{x:.1f} mV/g</b><extra></extra>' }
+      customdata: Ns.filter((_, i) => mis[i] != null).map(N => [master(N), scostamento(MODEL.misure[N].rate, master(N)), MODEL.misure[N].giorni]),
+      marker:{ symbol:'diamond', size:11, color:'#e7e9ef', line:{ color:C_SURF, width:2 } },
+      hovertemplate:'Misurato: <b>%{x:.1f} mV/g</b> su %{customdata[2]:.1f} giorni<br>master %{customdata[0]:.1f} → %{customdata[1]:+.0f}%<extra></extra>' }
   ], Object.assign({}, base, {
-    barmode:'stack', bargap:0.4, showlegend:true, margin:{ l: small ? 52 : 58, r:8, t:26, b:30 }, annotations: ann,
-    xaxis:{ range:[0, xmax], gridcolor:'#3a3f4d', zeroline:false, fixedrange:true, title:{ text:'mV/giorno (master) · giorni fino a ' + CONFIG.IOT_ALERT + ' mV (* = con il consumo misurato)', font:{ size:10, color:C_DIM } } },
+    barmode:'stack', bargap:0.38, showlegend:true, margin:{ l: small ? 92 : 104, r:8, t: small ? 46 : 26, b:30 }, annotations: ann,
+    legend:{ orientation:'h', x:0, y: small ? 1.24 : 1.13, traceorder:'normal', font:{ size:10, color:C_TXT } },
+    xaxis:{ range:[0, xmax], gridcolor:'#3a3f4d', zeroline:false, fixedrange:true, title:{ text:'mV consumati in 24 ore (master)', font:{ size:10, color:C_DIM } } },
     yaxis:{ autorange:'reversed', fixedrange:true, tickfont:{ size:11, color:C_TXT } }
   }), cfg);
 
