@@ -6,7 +6,7 @@
 <title>Barca-IoT · Consumi e comandi</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
-<link rel="stylesheet" href="barca.css?v=20261008g">
+<link rel="stylesheet" href="barca.css?v=20261008h">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body>
@@ -65,10 +65,10 @@
 </div>
 <div id="toast"></div>
 
-<script src="chiavi-cifrate.js?v=20261008g"></script>
-<script src="cassaforte.js?v=20261008g"></script>
-<script src="nav.js?v=20261008g" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
-<script src="barca.js?v=20261008g"></script>
+<script src="chiavi-cifrate.js?v=20261008h"></script>
+<script src="cassaforte.js?v=20261008h"></script>
+<script src="nav.js?v=20261008h" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
+<script src="barca.js?v=20261008h"></script>
 <script>
 /* ---------- carte consumi ---------- */
 function boatCard(key, name, capLabel){
@@ -100,8 +100,8 @@ function boatCard(key, name, capLabel){
 
 function renderConsumi(){
   const itv = detectInterval(), iot = lastN('iot');
-  const cs = new Date(CONFIG.CLEAN_START).getTime();
   const lastT = ROWS.length ? ROWS[ROWS.length-1].t.getTime() : Date.now();
+  const cs = inizioPulito(lastT);
   const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= Math.max(cs, lastT - CONFIG.TREND_DAYS_IOT*DAY));
   const fit = linfitRobusto(pts.map(p => ({ t:p.t, y:p.iot })));
   const N = itv.N && itv.N >= 1 ? itv.N : null;
@@ -158,12 +158,11 @@ function renderConsumi(){
 
 /* ---------- grafico consumo mobile ---------- */
 function renderRateChart(){
-  const cs = new Date(CONFIG.CLEAN_START).getTime();
-  const all = ROWS.filter(r => r.iot != null && r.t.getTime() >= cs);
+  const all = ROWS.filter(r => r.iot != null && r.t.getTime() >= inizioPulito(r.t.getTime()));
   const X = [], Y = [], C = [];
   for (let i = 0; i < all.length; i++){
-    const t = all[i].t.getTime();
-    const win = all.filter(r => r.t.getTime() <= t && r.t.getTime() > t - 3*DAY);
+    const t = all[i].t.getTime(), da = Math.max(t - 3*DAY, inizioPulito(t) - 1);   // finestra che non attraversa una ricarica
+    const win = all.filter(r => r.t.getTime() <= t && r.t.getTime() > da);
     const f = linfitRobusto(win.map(p => ({ t:p.t, y:p.iot })));
     if (!f || f.spanDays < 2.5) continue;
     const gap = i > 0 ? (t - all[i-1].t.getTime())/3600000 : null;

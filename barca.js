@@ -20,6 +20,8 @@ const CONFIG = {
   P_SLEEP: 12.72,   // mV/giorno consumati dal solo deep sleep
   E_CICLO: 1.863,   // mV consumati da ogni ciclo di lavoro (risveglio, rete, GPS, invii)
   CAL_MIN_DAYS: 5, CAL_MIN_POINTS: 6,   // periodo minimo per misurare il consumo di un intervallo
+  RICARICA_MV: 60,  // salita della batteria IoT oltre cui si considera una ricarica
+  ASSESTAMENTO_H: 12, // ore dopo una ricarica escluse dalle misure (tensione che si assesta)
   PICCO_MV: 6,      // scarto minimo (mV) dalla tendenza oltre cui una lettura IoT e' un picco da scartare
 
   // soglie batterie barca (AGM 12 V): ALERT ~50%, CRITICA ~10%
@@ -111,11 +113,31 @@ function haversine(a,b){
 let MODEL = { P: CONFIG.P_SLEEP, E: CONFIG.E_CICLO, auto: false, misure: {} };
 const model = N => ({ sleep: MODEL.P, work: (24/N)*MODEL.E, total: MODEL.P + (24/N)*MODEL.E });
 
+// Ricariche della batteria IoT: una lettura sale di oltre RICARICA_MV rispetto al minimo delle 3
+// precedenti. Ogni ricarica chiude il periodo di misura; il successivo parte dopo ASSESTAMENTO_H.
+let RICARICHE = [];
+function trovaRicariche(){
+  const p = ROWS.filter(r => r.iot != null);
+  RICARICHE = [];
+  for (let i = 1; i < p.length; i++){
+    const prima = Math.min(...p.slice(Math.max(0, i-3), i).map(r => r.iot));
+    if (p[i].iot - prima > CONFIG.RICARICA_MV && (!RICARICHE.length || p[i].t - RICARICHE[RICARICHE.length-1] > DAY))
+      RICARICHE.push(p[i].t.getTime());
+  }
+}
+// inizio dei dati validi per una misura che arriva fino al tempo t: dopo CLEAN_START e dopo
+// l'assestamento dell'ultima ricarica precedente
+function inizioPulito(t){
+  let s = new Date(CONFIG.CLEAN_START).getTime();
+  for (const r of RICARICHE) if (r <= t) s = Math.max(s, r + CONFIG.ASSESTAMENTO_H*3600000);
+  return s;
+}
+const epoca = t => RICARICHE.filter(r => r <= t).length;   // quante ricariche prima di t
+
 // Divide le letture (dopo CLEAN_START) in periodi con intervallo costante, misura il consumo di
 // ciascuno e ricava P_SLEEP ed E_CICLO con una regressione pesata sulla durata dei periodi.
 function calibraModello(){
-  const cs = new Date(CONFIG.CLEAN_START).getTime();
-  const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= cs);
+  const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= inizioPulito(r.t.getTime()));
   const snap = h => [3,6,12,24].find(k => Math.abs(h-k)/k < 0.2) || null;
   // intervallo di ogni lettura = il piu' breve tra i due vicini (un invio saltato allunga solo un lato)
   const lab = pts.map((p, i) => {
@@ -126,7 +148,7 @@ function calibraModello(){
   for (let i = 0; i < pts.length; i++){
     if (!lab[i]) continue;
     const last = seg[seg.length-1];
-    if (last && last.N === lab[i] && last.end === i-1){ last.pts.push(pts[i]); last.end = i; }
+    if (last && last.N === lab[i] && last.end === i-1 && epoca(last.pts[0].t.getTime()) === epoca(pts[i].t.getTime())){ last.pts.push(pts[i]); last.end = i; }
     else seg.push({ N: lab[i], pts: [pts[i]], end: i });
   }
   const misure = {};
@@ -186,6 +208,7 @@ async function loadData(){
     if (lat == null || lon == null || (lat === 0 && lon === 0) || Math.abs(lat) > 90 || Math.abs(lon) > 180){ lat = lon = null; }
     return { t: new Date(f.created_at), v1, v2, iot, lat, lon };
   }).filter(r => !isNaN(r.t)).sort((a,b) => a.t - b.t);
+  trovaRicariche();
   calibraModello();
 }
 // dove stanno latitudine e longitudine nel canale
@@ -227,7 +250,7 @@ function detectInterval(){
 function iotRecharge(){
   const iot = lastN('iot');
   if (iot == null || !ROWS.length) return null;
-  const cs = new Date(CONFIG.CLEAN_START).getTime(), lastT = ROWS[ROWS.length-1].t.getTime();
+  const lastT = ROWS[ROWS.length-1].t.getTime(), cs = inizioPulito(lastT);
   const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= Math.max(cs, lastT - CONFIG.TREND_DAYS_IOT*DAY));
   const fit = linfitRobusto(pts.map(p => ({ t:p.t, y:p.iot })));
   const meas = fit && fit.spanDays >= 1.5 && fit.n >= 6 ? -fit.slope : null;
@@ -329,6 +352,12 @@ function plotSeries(divId, rngId, key, color, unit, dec, opts = {}){
   if (cs >= pts[0].t){
     shapes.push({ type:'line', xref:'x', yref:'paper', x0:romeStr(cs), x1:romeStr(cs), y0:0, y1:1, line:{color:'#888', width:1, dash:'dash'} });
     annots.push({ xref:'x', x:romeStr(cs), yref:'paper', y:1, yanchor:'top', xanchor:'left', text:' inizio test', showarrow:false, font:{size:10, color:'#aaa'} });
+  }
+  if (key === 'iot') for (const r of RICARICHE){   // ricariche della batteria IoT
+    if (r < tmin || r > tmax) continue;
+    const x = romeStr(new Date(r));
+    shapes.push({ type:'line', xref:'x', yref:'paper', x0:x, x1:x, y0:0, y1:1, line:{color:'#4cd38a', width:1, dash:'dash'} });
+    annots.push({ xref:'x', x, yref:'paper', y:1, yanchor:'top', xanchor:'left', text:' ricarica', showarrow:false, font:{size:10, color:'#4cd38a'} });
   }
   let pad = (hi - lo) * 0.14 || (dec >= 2 ? 0.02 : 10);
   if (opts.yFixed){   // scala fissa, allargata solo se i dati escono
