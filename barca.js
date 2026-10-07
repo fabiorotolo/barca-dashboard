@@ -1,7 +1,8 @@
 /* ================= CONFIG (unico punto da modificare) ================= */
 const CONFIG = {
   CHANNEL_ID: '3151316',
-  READ_KEY:   'HOX536Y5SOGURW4X',
+  // la Read API Key NON sta nel codice (il sito e' pubblico): si inserisce una volta
+  // nel browser e resta salvata solo li'. Si puo' anche aprire il sito con ?key=XXXX
   MAX_RESULTS: 8000,           // massimo consentito da ThingSpeak per richiesta
   REFRESH_MS:  5 * 60 * 1000,  // ricarica i dati ogni 5 minuti
   TZ: 'Europe/Rome',
@@ -92,11 +93,51 @@ let currentEnd = null;   // fine della finestra dei grafici; null = adesso. Camb
 const viewEnd = () => currentEnd ? currentEnd.getTime() : Date.now();
 try { const s = localStorage.getItem('barca-range'); if (s) currentRange = s; } catch(e){}
 
+/* ---------- accesso: chiave di lettura salvata solo in questo browser ---------- */
+const KEY_STORE = 'barca-read-key';
+function readKey(){
+  try {
+    const u = new URL(location.href), k = u.searchParams.get('key');
+    if (k){   // link con ?key=...: salva la chiave e la toglie dall'indirizzo
+      localStorage.setItem(KEY_STORE, k.trim());
+      u.searchParams.delete('key'); history.replaceState(null, '', u.pathname + u.search + u.hash);
+    }
+    return localStorage.getItem(KEY_STORE) || '';
+  } catch(e){ return ''; }
+}
+function logout(){ try { localStorage.removeItem(KEY_STORE); } catch(e){} location.reload(); }
+function askKey(msg){
+  if ($('login')) return;
+  const d = document.createElement('div');
+  d.id = 'login';
+  d.innerHTML = `<form class="login-box">
+      <div class="login-t">⚓ Barca-IoT</div>
+      <div class="note" style="margin:0">${msg || 'Accesso riservato. Inserisci la Read API Key del canale ThingSpeak: resta salvata solo in questo browser.'}</div>
+      <input id="login-key" type="password" autocomplete="current-password" placeholder="Read API Key" required>
+      <button class="btn active" type="submit">Entra</button>
+    </form>`;
+  document.body.appendChild(d);
+  d.querySelector('form').addEventListener('submit', ev => {
+    ev.preventDefault();
+    try { localStorage.setItem(KEY_STORE, $('login-key').value.trim()); } catch(e){}
+    location.reload();
+  });
+  $('login-key').focus();
+}
+class LoginNeeded extends Error {}
+
 async function loadData(){
-  const url = `https://api.thingspeak.com/channels/${CONFIG.CHANNEL_ID}/feeds.json?api_key=${CONFIG.READ_KEY}&results=${CONFIG.MAX_RESULTS}&location=true`;
+  const key = readKey();
+  if (!key){ askKey(); throw new LoginNeeded('chiave mancante'); }
+  const url = `https://api.thingspeak.com/channels/${CONFIG.CHANNEL_ID}/feeds.json?api_key=${encodeURIComponent(key)}&results=${CONFIG.MAX_RESULTS}&location=true`;
   const res = await fetch(url, { cache: 'no-store' });
+  const j = res.ok ? await res.json() : null;
+  if (res.status === 400 || res.status === 401 || res.status === 403 || j === -1 || (j && !j.feeds)){
+    try { localStorage.removeItem(KEY_STORE); } catch(e){}
+    askKey('Chiave non valida. Inserisci la Read API Key del canale ThingSpeak.');
+    throw new LoginNeeded('chiave non valida');
+  }
   if (!res.ok) throw new Error('HTTP ' + res.status);
-  const j = await res.json();
   CHANNEL = j.channel || {};
   const [kLat, kLon] = gpsKeys(j.feeds || []);
   ROWS = (j.feeds || []).map(f => {
@@ -121,7 +162,7 @@ function channelFields(){
   return Object.keys(CHANNEL).filter(k => /^field\d$/.test(k)).sort().map(k => `${k} "${CHANNEL[k]}"`).join(', ');
 }
 function showError(e){
-  const b = $('banner'); if (!b) return;
+  const b = $('banner'); if (!b || e instanceof LoginNeeded) return;
   b.style.display = 'block';
   b.textContent = 'Impossibile leggere i dati da ThingSpeak (' + e.message + '). Riprovo tra poco' + (ROWS.length ? '; sono mostrati gli ultimi dati scaricati.' : '.');
 }

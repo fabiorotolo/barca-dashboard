@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Barca-IoT</title>
+<meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="barca.css">
@@ -47,7 +48,7 @@
       <button class="btn" data-range="30">1m</button>
       <button class="btn" data-range="all">Tutto</button>
     </div>
-    <div class="navs"><a class="btn" href="consumi.html">⚡ Consumi e comandi →</a></div>
+    <div class="navs"><button class="btn" type="button" onclick="logout()" title="Dimentica la chiave su questo dispositivo">🔒 Esci</button> <a class="btn" href="consumi.html">⚡ Consumi e comandi →</a></div>
   </div>
 </div>
 

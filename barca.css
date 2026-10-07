@@ -48,6 +48,11 @@ a{color:var(--accent)}
 .btn:hover{border-color:var(--accent)}
 .btn.active{background:var(--accent);border-color:var(--accent);box-shadow:0 0 10px rgba(61,124,255,.55)}
 .bottombar.footer{position:sticky;bottom:0;background:var(--bg-main);border-top:1px solid var(--line);padding:8px 0;margin-top:2px;z-index:500}
+#login{position:fixed;inset:0;background:rgba(10,12,18,.92);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px}
+.login-box{background:var(--bg-panel);border:1px solid var(--line);border-radius:12px;padding:18px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
+.login-t{font-size:18px;font-weight:700}
+.login-box input{background:var(--bg-main);color:var(--text-main);border:1px solid var(--line);border-radius:7px;padding:9px 10px;font:14px var(--mono)}
+.login-box .btn{padding:8px 12px;font-size:14px}
 #banner{display:none;background:rgba(255,92,92,.14);border:1px solid var(--danger);color:#ffb3b3;border-radius:8px;padding:6px 12px;font-size:13px}
 
 .mono{font-family:var(--mono)}
