@@ -60,8 +60,9 @@ function setTile(id, cls, val, unit, tag){
   el.querySelector('.tag').innerHTML = tag || '';
 }
 const boatCls = v => v == null ? '' : v < CONFIG.BOAT_CRIT ? 'bad' : v < CONFIG.BOAT_ALERT ? 'warn' : '';
-const BOAT_OPTS = { yFixed: CONFIG.BOAT_Y, tickDec:1, thresholds:{ nearBelow:Infinity, lines:[
-  { v:CONFIG.BOAT_ALERT, c:'#ffb84d', t:'ALERT ' + nf(CONFIG.BOAT_ALERT,1) }, { v:CONFIG.BOAT_CRIT, c:'#ff5c5c', t:'CRITICA ' + nf(CONFIG.BOAT_CRIT,1) } ] } };
+const BOAT_OPTS = { thresholds:{ nearBelow:CONFIG.BOAT_NEAR, lines:[
+  { v:CONFIG.BOAT_ALERT, c:'#ffb84d', t:'ALERT ' + nf(CONFIG.BOAT_ALERT,1) },
+  { v:CONFIG.BOAT_CRIT, c:'#ff5c5c', t:'CRITICA ' + nf(CONFIG.BOAT_CRIT,1), below:CONFIG.BOAT_ALERT } ] } };
 
 function renderTiles(){
   const v1 = lastN('v1'), v2 = lastN('v2'), iot = lastN('iot');
