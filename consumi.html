@@ -14,10 +14,7 @@
 
   <div class="page-hd">
     <h1>⚓ BARCA<span>-IoT</span> · Consumi e comandi</h1>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span class="mono d" style="font-size:12px" id="sub">--</span>
-      <a class="btn" href="index.html">← Dashboard</a>
-    </div>
+    <span class="mono d" style="font-size:12px" id="sub">--</span>
   </div>
 
   <div id="banner"></div>
@@ -44,6 +41,12 @@
   </section>
 
   <div class="metaline"><span id="f-count">--</span><span>Canale ThingSpeak 3151316</span></div>
+
+  <div class="bottombar footer">
+    <div class="l"><b>Consumi e comandi</b><br><span id="f-upd">--</span></div>
+    <div class="ranges"></div>
+    <div class="navs"><a class="btn" href="index.html">← Dashboard</a></div>
+  </div>
 </div>
 </div>
 <div id="toast"></div>
@@ -222,6 +225,7 @@ async function refresh(){
     await loadData(); clearError();
     renderConsumi(); renderRateChart(); renderCommands(); renderGps();
     $('f-count').textContent = `${ROWS.length} letture · prima: ${ROWS.length ? fmtFull(ROWS[0].t) : '--'}`;
+    $('f-upd').textContent = 'Pagina aggiornata: ' + fmtShort(new Date());
   } catch (e){ showError(e); }
 }
 window.addEventListener('load', () => { refresh(); setInterval(refresh, CONFIG.REFRESH_MS); });

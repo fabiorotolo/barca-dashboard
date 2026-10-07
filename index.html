@@ -79,8 +79,7 @@ function renderTiles(){
   }
   $('f-count').textContent = ROWS.length + (itv.N ? ` | Invio atteso ogni ${nf(itv.N, itv.snapped ? 0 : 1)} h` : '');
   $('f-upd').textContent = fmtShort(new Date());
-  const days = rangeDays();
-  $('f-range').textContent = `Range: ${rangeLabel()} | Fine: ${fmtFull(new Date())}`;
+  $('f-range').textContent = windowLabel();
 }
 
 function renderCharts(){
@@ -88,7 +87,7 @@ function renderCharts(){
   plotSeries('ch-v2','r-v2','v2','#3d9cff','V',3,{ fill:'rgba(61,156,255,.15)' });
   plotSeries('ch-iot','r-iot','iot','#ffb84d','mV',0,{ fill:'rgba(255,184,77,.13)', thresholds:{ nearBelow:3800, lines:[
     { v:CONFIG.IOT_ALERT, c:'#ffb84d', t:'ALERT 3500' }, { v:CONFIG.IOT_CRIT, c:'#ff5c5c', t:'CRITICA 3300' } ] } });
-  $('f-range').textContent = `Range: ${rangeLabel()} | Fine: ${fmtFull(new Date())}` + (isTouch ? '' : ' | Trascina i grafici per scorrere, doppio clic per tornare');
+  $('f-range').textContent = windowLabel() + ' | Trascina un grafico per andare indietro nel tempo';
 }
 
 async function refresh(){
@@ -98,6 +97,7 @@ async function refresh(){
 window.addEventListener('load', () => {
   initMap(); tickClock(); setInterval(tickClock, 1000);
   setupRangeButtons(renderCharts);
+  onPan = renderCharts;
   refresh(); setInterval(refresh, CONFIG.REFRESH_MS);
 });
 </script>

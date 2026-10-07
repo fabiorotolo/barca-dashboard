@@ -84,10 +84,12 @@ const model = N => ({ sleep: CONFIG.P_SLEEP, work: (24/N)*CONFIG.E_CICLO, total:
 let ROWS = [];
 let CHANNEL = {};
 let currentRange = '7';
+let currentEnd = null;   // fine della finestra dei grafici; null = adesso. Cambia trascinando un grafico
+const viewEnd = () => currentEnd ? currentEnd.getTime() : Date.now();
 try { const s = localStorage.getItem('barca-range'); if (s) currentRange = s; } catch(e){}
 
 async function loadData(){
-  const url = `https://api.thingspeak.com/channels/${CONFIG.CHANNEL_ID}/feeds.json?api_key=${CONFIG.READ_KEY}&results=${CONFIG.MAX_RESULTS}`;
+  const url = `https://api.thingspeak.com/channels/${CONFIG.CHANNEL_ID}/feeds.json?api_key=${CONFIG.READ_KEY}&results=${CONFIG.MAX_RESULTS}&location=true`;
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const j = await res.json();
@@ -147,7 +149,7 @@ function setupRangeButtons(onChange){
     b.classList.toggle('active', b.dataset.range === currentRange);
     b.addEventListener('click', () => {
       document.querySelectorAll('.btn[data-range]').forEach(x => x.classList.remove('active'));
-      b.classList.add('active'); currentRange = b.dataset.range;
+      b.classList.add('active'); currentRange = b.dataset.range; currentEnd = null;   // torna ad adesso
       try { localStorage.setItem('barca-range', currentRange); } catch(e){}
       if (ROWS.length) onChange();
     });
@@ -159,26 +161,37 @@ function tickClock(){
 }
 
 /* ================= GRAFICI ================= */
-// i grafici disegnati con plotSeries scorrono insieme sull'asse del tempo
-const LINKED = new Set();
-let DEFAULT_X = null, syncing = false;
-function syncX(srcId, ev){
-  if (syncing) return;
-  let upd;
-  if (ev['xaxis.range[0]'] !== undefined) upd = { 'xaxis.range': [ev['xaxis.range[0]'], ev['xaxis.range[1]']] };
-  else if (ev['xaxis.range']) upd = { 'xaxis.range': ev['xaxis.range'] };
-  else if (ev['xaxis.autorange'] && DEFAULT_X) upd = { 'xaxis.range': DEFAULT_X };  // doppio clic: torna al periodo scelto
-  else return;
-  syncing = true;
-  const ids = [...LINKED].filter(id => ev['xaxis.autorange'] || id !== srcId);
-  Promise.all(ids.map(id => Plotly.relayout($(id), upd))).finally(() => { syncing = false; });
+// Trascinando un grafico si sposta la fine della finestra di tempo: al rilascio
+// tutti i grafici vengono ridisegnati sul nuovo periodo (come meteo-dashboard).
+let isDragging = false, onPan = null;
+function setupPanHandler(el, tmin, tmax){
+  el.removeAllListeners && el.removeAllListeners('plotly_relayout');
+  el.removeAllListeners && el.removeAllListeners('plotly_relayouting');
+  el.on('plotly_relayouting', () => { isDragging = true; });
+  el.on('plotly_relayout', ev => {
+    if (!isDragging || !ev['xaxis.range[1]']) return;
+    isDragging = false;
+    // l'asse e' in ora italiana: riporta lo spostamento sul tempo reale
+    const shift = toMs(ev['xaxis.range[1]']) - toMs(romeStr(new Date(tmax)));
+    let newEnd = tmax + shift;
+    if (newEnd >= Date.now() - 60000) newEnd = null;                 // trascinato fino ad adesso: torna live
+    else if (ROWS.length && newEnd < ROWS[0].t.getTime() + (tmax - tmin) / 2) newEnd = ROWS[0].t.getTime() + (tmax - tmin) / 2;
+    if (newEnd !== null && Math.abs(newEnd - viewEnd()) < 1000) return;
+    currentEnd = newEnd === null ? null : new Date(newEnd);
+    if (onPan) onPan();
+  });
+}
+const toMs = s => Date.parse(String(s).replace(' ', 'T') + 'Z');
+function windowLabel(){
+  return `Range: ${rangeLabel()} | Fine: ${currentEnd ? fmtFull(currentEnd) : 'adesso'}`;
 }
 function plotSeries(divId, rngId, key, color, unit, dec, opts = {}){
   const days = rangeDays();
-  const tmin = isFinite(days) ? Date.now() - days*DAY : 0;
-  const pts = ROWS.filter(r => r[key] != null && r.t.getTime() >= tmin);
+  const tmax = viewEnd();
+  const tmin = isFinite(days) ? tmax - days*DAY : (ROWS.length ? ROWS[0].t.getTime() : tmax - DAY);
+  const pts = ROWS.filter(r => r[key] != null && r.t.getTime() >= tmin && r.t.getTime() <= tmax);
   const el = $(divId);
-  if (!pts.length){ Plotly.purge(el); el._linked = false; LINKED.delete(divId); el.innerHTML = '<div class="note" style="padding:20px">Nessun dato nel periodo selezionato.</div>'; if ($(rngId)) $(rngId).textContent=''; return; }
+  if (!pts.length){ Plotly.purge(el); el.innerHTML = '<div class="note" style="padding:20px">Nessun dato nel periodo selezionato.</div>'; if ($(rngId)) $(rngId).textContent=''; return; }
   const x = pts.map(p => romeStr(p.t)), y = pts.map(p => p[key]);
   const ymin = Math.min(...y), ymax = Math.max(...y), imin = y.indexOf(ymin), imax = y.indexOf(ymax);
   if ($(rngId)) $(rngId).textContent = `Min: ${nf(ymin,dec)} ${unit} | Max: ${nf(ymax,dec)} ${unit}`;
@@ -206,33 +219,39 @@ function plotSeries(divId, rngId, key, color, unit, dec, opts = {}){
     annots.push({ xref:'x', x:romeStr(cs), yref:'paper', y:1, yanchor:'top', xanchor:'left', text:' inizio test', showarrow:false, font:{size:10, color:'#aaa'} });
   }
   const pad = (hi - lo) * 0.14 || (dec >= 2 ? 0.02 : 10);
-  const spanH = (Date.now() - (isFinite(days) ? tmin : pts[0].t.getTime())) / 3600000;
+  const spanH = (tmax - tmin) / 3600000;
   const small = innerWidth <= 600;
-  DEFAULT_X = [romeStr(new Date(isFinite(days) ? tmin : ROWS[0].t.getTime())), romeStr(new Date())];
   const layout = {
-    autosize:true, separators:',.', uirevision: currentRange,
+    autosize:true, separators:',.',
     paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
     font:{ color:'#ffffff', size: small ? 10 : 12 },
     margin: small ? {l:44, r:8, t:8, b:26} : {l:52, r:12, t:8, b:28},
-    xaxis:{ type:'date', range: DEFAULT_X, gridcolor:'#555555', linecolor:'#cfd2da', tickformat: spanH <= 49 ? '%H:%M' : '%d/%m', hoverformat:'%d/%m %H:%M' },
+    xaxis:{ type:'date', range:[romeStr(new Date(tmin)), romeStr(new Date(tmax))], gridcolor:'#555555', linecolor:'#cfd2da', tickformat: spanH <= 49 ? '%H:%M' : '%d/%m', hoverformat:'%d/%m %H:%M' },
     yaxis:{ gridcolor:'#555555', linecolor:'#cfd2da', range:[lo - pad, hi + pad], fixedrange:true, tickformat:`.${dec}f`, zeroline:false },
-    shapes, annotations: annots, showlegend:false, dragmode: isTouch ? false : 'pan', hovermode:'closest'
+    shapes, annotations: annots, showlegend:false, dragmode:'pan', hovermode:'closest'
   };
+  if (el.querySelector('.note')) el.innerHTML = '';
   Plotly.react(el, traces, layout, { displayModeBar:false, responsive:true, scrollZoom:false });
-  LINKED.add(divId);
-  if (!el._linked){ el.on('plotly_relayout', ev => syncX(divId, ev)); el._linked = true; }
+  setupPanHandler(el, tmin, tmax);
 }
 
 /* ================= MAPPA ================= */
 let map, mapLayer;
 function initMap(){
   map = L.map('map', { zoomControl:true, attributionControl:true }).setView([42.1, 14.4], 9);
-  const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution:'© OpenStreetMap © CARTO', maxZoom:19, subdomains:'abcd' });
+  const esri = n => `https://server.arcgisonline.com/ArcGIS/rest/services/${n}/MapServer/tile/{z}/{y}/{x}`;
+  const dark = L.layerGroup([
+    L.tileLayer(esri('Canvas/World_Dark_Gray_Base'), { attribution:'Tiles © Esri', maxZoom:19, maxNativeZoom:16 }),
+    L.tileLayer(esri('Canvas/World_Dark_Gray_Reference'), { maxZoom:19, maxNativeZoom:16 })
+  ]);
   const osm  = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© OpenStreetMap', maxZoom:19 });
   const sat  = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'Tiles © Esri', maxZoom:19 });
   const sea  = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', { attribution:'© OpenSeaMap', maxZoom:18 });
-  dark.addTo(map);
-  L.control.layers({ 'Scura':dark, 'Mappa':osm, 'Satellite':sat }, { 'Segnali nautici':sea }, { collapsed:true }).addTo(map);
+  const bases = { 'Scura':dark, 'Mappa':osm, 'Satellite':sat };
+  let saved = null; try { saved = localStorage.getItem('barca-map'); } catch(e){}
+  (bases[saved] || dark).addTo(map);
+  map.on('baselayerchange', e => { try { localStorage.setItem('barca-map', e.name); } catch(err){} });
+  L.control.layers(bases, { 'Segnali nautici':sea }, { collapsed:true }).addTo(map);
   mapLayer = L.layerGroup().addTo(map);
 }
 function gpsFixes(){ return ROWS.filter(r => r.lat != null).slice(-CONFIG.MAP_POINTS); }
@@ -242,7 +261,7 @@ function renderMap(){
   const rng = $('r-map');
   if (!fixes.length){
     const f = channelFields();
-    $('mapinfo').textContent = 'Nessuna posizione GPS nei dati ThingSpeak: la scheda non invia latitudine/longitudine al canale.' + (f ? ' Campi del canale: ' + f + '.' : '');
+    $('mapinfo').textContent = 'Nessuna posizione GPS nei dati ThingSpeak (latitudine/longitudine vuote negli ultimi ' + ROWS.length + ' invii).' + (f ? ' Campi del canale: ' + f + '.' : '');
     if (rng) rng.textContent = ''; return;
   }
   const coords = fixes.map(f => [f.lat, f.lon]);
