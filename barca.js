@@ -19,6 +19,12 @@ const CONFIG = {
   // finche' non ci sono almeno due intervalli diversi misurati (test 6h e 3h di settembre-ottobre 2026).
   P_SLEEP: 12.72,   // mV/giorno consumati dal solo deep sleep
   E_CICLO: 1.863,   // mV consumati da ogni ciclo di lavoro (risveglio, rete, GPS, invii)
+  // MASTER: consumo "pulito" di riferimento, FISSO. Calcolato l'08/10/2026 da periodi di almeno 5 giorni
+  // senza consumi anomali: 6 h dal 22/09 03:00 al 28/09 03:00 (5,8 gg, 17,5 mV/g) e 3 h dal 28/09 03:00
+  // al 03/10 15:00 (5,3 gg, 25,7 mV/g). Le misure reali vengono confrontate con questo;
+  // da aggiornare quando si analizzano 12 h e 24 h.
+  MASTER: { P: 9.28, E: 2.053, rif: { 6: 17.5, 3: 25.7 }, nota: '6 h 22-28/09 · 3 h 28/09-03/10, 5+ giorni ciascuno' },
+  SCOSTAMENTO_PCT: 15,   // oltre questa differenza dal master una misura viene evidenziata
   CAL_MIN_DAYS: 5, CAL_MIN_POINTS: 6,   // periodo minimo per misurare il consumo di un intervallo
   RICARICA_MV: 60,  // salita della batteria IoT oltre cui si considera una ricarica
   ASSESTAMENTO_H: 12, // ore dopo una ricarica escluse dalle misure (tensione che si assesta)
@@ -111,6 +117,25 @@ function haversine(a,b){
 }
 // parametri del modello in uso (aggiornati da calibraModello dopo ogni caricamento dati)
 let MODEL = { P: CONFIG.P_SLEEP, E: CONFIG.E_CICLO, auto: false, misure: {} };
+const master = N => CONFIG.MASTER.P + (24/N)*CONFIG.MASTER.E;   // consumo master (mV/giorno)
+const snapN = h => [3,6,12,24].find(k => Math.abs(h-k)/k < 0.2) || null;
+// consumo master atteso su una serie di letture: si costruisce la tensione che avrebbe una batteria
+// "master" negli stessi istanti (con gli intervalli realmente usati) e la si misura con la stessa
+// regressione delle letture vere, cosi' il confronto e' alla pari anche quando l'intervallo cambia.
+function masterAtteso(pts){
+  if (pts.length < 3) return null;
+  let v = 0, ok = 0; const sint = [{ t: pts[0].t, y: 0 }];
+  for (let i = 1; i < pts.length; i++){
+    const h = (pts[i].t - pts[i-1].t) / 3600000;
+    const N = snapN(Math.min(h, i > 1 ? (pts[i-1].t - pts[i-2].t)/3600000 : Infinity)) || snapN(h);
+    if (N){ v -= master(N) * h / 24; ok++; }
+    sint.push({ t: pts[i].t, y: v });
+  }
+  const f = ok ? linfit(sint) : null;
+  return f ? -f.slope : null;
+}
+const scostamento = (mis, rif) => rif ? (mis / rif - 1) * 100 : null;
+const fuoriMaster = pct => pct != null && Math.abs(pct) > CONFIG.SCOSTAMENTO_PCT;
 const model = N => ({ sleep: MODEL.P, work: (24/N)*MODEL.E, total: MODEL.P + (24/N)*MODEL.E });
 
 // Ricariche della batteria IoT: una lettura sale di oltre RICARICA_MV rispetto al minimo delle 3
