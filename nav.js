@@ -11,19 +11,25 @@
     meteo: "https://fabiorotolo.github.io/meteo-dashboard/",
     barca: "https://fabiorotolo.github.io/barca-dashboard/"
   };
-  // Ambienti da sinistra a destra (Esci sempre in fondo a destra). Su ogni pagina compaiono le
-  // sotto-pagine del proprio ambiente; degli altri ambienti solo il pulsante principale (il primo).
-  const AMBIENTI = [
-    { id: "meteo", pagine: [
-      { id: "meteo",     repo: "meteo", file: "index.html",     testo: "🌤 Meteo" },
-      { id: "confronto", repo: "meteo", file: "confronto.html", testo: "Confronto" },
-      { id: "dati",      repo: "meteo", file: "dati.html",      testo: "Dati" } ] },
-    { id: "energia", pagine: [
-      { id: "energia",   repo: "meteo", file: "energia.html",   testo: "⚡ Consumi" } ] },
-    { id: "barca", pagine: [
-      { id: "barca",     repo: "barca", file: "index.html",     testo: "⚓ Barca" },
-      { id: "comandi",   repo: "barca", file: "consumi.html",   testo: "🔧 Comandi barca" } ] }
-  ];
+  const PAGINE = {
+    meteo:     { repo: "meteo", file: "index.html",     testo: "🌤 Meteo" },
+    confronto: { repo: "meteo", file: "confronto.html", testo: "Confronto" },
+    dati:      { repo: "meteo", file: "dati.html",      testo: "Dati" },
+    energia:   { repo: "meteo", file: "energia.html",   testo: "⚡ Consumi" },
+    barca:     { repo: "barca", file: "index.html",     testo: "⚓ Barca" },
+    comandi:   { repo: "barca", file: "consumi.html",   testo: "🔧 Comandi barca" }
+  };
+  // Barra di ogni pagina, da sinistra a destra, a gruppi (ambienti); Esci si aggiunge sempre in fondo.
+  // Le pagine principali (Meteo, Consumi, Barca) sono collegate tra loro, con Meteo ("casa") accanto
+  // a Esci; le sotto-pagine portano solo dentro il proprio ambiente.
+  const BARRE = {
+    meteo:     [["confronto", "dati"], ["energia"], ["barca"]],
+    confronto: [["meteo", "dati"]],
+    dati:      [["meteo", "confronto"]],
+    energia:   [["barca"], ["meteo"]],
+    barca:     [["comandi"], ["energia"], ["meteo"]],
+    comandi:   [["barca"]]
+  };
 
   const s = document.currentScript;
   const repo = s.dataset.repo, qui = s.dataset.pagina;
@@ -49,13 +55,11 @@
   }
   box.classList.add("nav-comune");
 
-  const mioAmbiente = (AMBIENTI.find(am => am.pagine.some(p => p.id === qui)) || {}).id;
-  for (const am of AMBIENTI) {
-    const pagine = (am.id === mioAmbiente ? am.pagine : am.pagine.slice(0, 1)).filter(p => p.id !== qui);
-    if (!pagine.length) continue;
+  for (const gruppo of BARRE[qui] || []) {
     const g = document.createElement("span");
     g.className = "nav-gruppo";
-    for (const p of pagine) {
+    for (const id of gruppo) {
+      const p = PAGINE[id];
       const a = document.createElement("a");
       a.className = "navbtn";
       // stesso sito: link relativo (funziona anche in locale sul kiosk); altro sito: indirizzo completo
