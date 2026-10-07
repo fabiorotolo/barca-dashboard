@@ -67,7 +67,7 @@
 <script src="chiavi-cifrate.js?v=20261008h"></script>
 <script src="cassaforte.js?v=20261008h"></script>
 <script src="nav.js?v=20261008h" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
-<script src="barca.js?v=20261008l"></script>
+<script src="barca.js?v=20261008m"></script>
 <script>
 /* ---------- carte consumi ---------- */
 function boatCard(key, name, capLabel){
@@ -140,17 +140,17 @@ function renderConsumi(){
       c2 += `<div class="row d" style="margin-bottom:2px">Ricarica consigliata entro</div>`;
       c2 += `<div class="big" style="color:${col}">${rc.daysAlert <= 0 ? 'ORA' : dayStr(rc.dAlert)} <small>${rc.daysAlert <= 0 ? '' : '~' + daysStr(rc.daysAlert) + ' · '}a ${CONFIG.IOT_ALERT} mV</small></div>`;
       c2 += `<div class="row">Critica (${CONFIG.IOT_CRIT} mV): <b>${dayStr(rc.dCrit)}</b> (~${daysStr(Math.max(0, rc.daysCrit))})</div>`;
-      c2 += `<div class="row d">Consumo usato: <b>${nf(rc.rate,1)} mV/giorno</b> (${rc.src}${rc.meas != null && rc.mod != null ? `; misurato ${nf(rc.meas,1)}, modello ${nf(rc.N,0)} h ${nf(rc.mod,1)}` : ''}): il più alto dei due, per prudenza.</div>`;
+      c2 += `<div class="row d">Consumo usato: <b>${nf(rc.rate,1)} mV/giorno</b> (${rc.src}${rc.meas != null && rc.mod != null ? `; misurato ultimi giorni ${nf(rc.meas,1)}, previsto ${nf(rc.N,0)} h ${nf(rc.mod,1)} da ${fontePrevisto(rc.N)}` : ''}): il più alto dei due, per prudenza.</div>`;
       c2 += '<hr style="border:0;border-top:1px solid var(--line);margin:8px 0">';
     }
     c2 += `<div class="row d">Da ${nf(iot,0)} mV (mediana ultime 3 letture) fino a:</div>`;
     c2 += '<div class="tbl-wrap"><table><tr><th>Invio</th><th>mV/g</th><th>a 3500 (alert)</th><th>a 3300 (critica)</th></tr>';
     for (const k of [3,6,12,24]){
-      const r = model(k).total;
+      const r = previsto(k);
       const misurato = MODEL.misure[k];
       c2 += `<tr class="${N === k ? 'hl' : ''}"><td>${k} h${misurato ? '' : '<span class="tag2">stima</span>'}</td><td>${nf(r,1)}</td><td>${daysStr((iot-CONFIG.IOT_ALERT)/r)}</td><td>${daysStr((iot-CONFIG.IOT_CRIT)/r)}</td></tr>`;
     }
-    c2 += '</table></div><div class="note">"stima" = intervallo non ancora misurato: valore estrapolato dal modello. Verso fine scarica la tensione cala più in fretta: i valori vicino a 3300 mV sono ottimistici.</div>';
+    c2 += '</table></div><div class="note">Intervalli misurati: consumo reale. "stima" = intervallo non ancora misurato: si usa il master. Verso fine scarica la tensione cala più in fretta: i valori vicino a 3300 mV sono ottimistici.</div>';
   }
   c2 += '</div>';
 
@@ -213,10 +213,10 @@ function renderSplit(){
   const mis = Ns.map(N => MODEL.misure[N] ? MODEL.misure[N].rate : null);
   const xmax = Math.max(...tot, ...mis.filter(v => v != null)) * (small ? 1.9 : 1.7);
   const ann = Ns.map((N, i) => {
-    const d = iot != null ? (iot - CONFIG.IOT_ALERT) / tot[i] : null, pct = mis[i] != null ? scostamento(mis[i], tot[i]) : null;
+    const d = iot != null ? (iot - CONFIG.IOT_ALERT) / previsto(N) : null, pct = mis[i] != null ? scostamento(mis[i], tot[i]) : null;
     const col = fuoriMaster(pct) ? (pct > 0 ? '#ff7b7b' : '#4cd38a') : (N === cur ? '#fff' : C_TXT);
     return { x: Math.max(tot[i], mis[i] || 0), y: y[i], xanchor:'left', xshift:8, showarrow:false, font:{ size:11, color: col },
-      text: `${N === cur ? '<b>' : ''}${nf(tot[i],1)}${d != null ? ' · ' + daysStr(Math.max(0,d)) : ''}${N === cur ? '</b> ◀' : ''}` +
+      text: `${N === cur ? '<b>' : ''}${nf(tot[i],1)}${d != null ? ' · ' + daysStr(Math.max(0,d)) + (mis[i] != null ? '*' : '') : ''}${N === cur ? '</b> ◀' : ''}` +
             (pct != null ? `<br>misurato ${nf(mis[i],1)} (${pctTxt(pct)})${fuoriMaster(pct) && pct > 0 ? ' ⚠' : ''}` : '<br><span style="color:#8d93a5">non ancora misurato</span>') };
   });
   Plotly.react($('ch-split'), [
@@ -230,7 +230,7 @@ function renderSplit(){
       hovertemplate:'%{y}<br>Misurato: <b>%{x:.1f} mV/g</b><extra></extra>' }
   ], Object.assign({}, base, {
     barmode:'stack', bargap:0.4, showlegend:true, margin:{ l: small ? 52 : 58, r:8, t:26, b:30 }, annotations: ann,
-    xaxis:{ range:[0, xmax], gridcolor:'#3a3f4d', zeroline:false, fixedrange:true, title:{ text:'mV/giorno (master) · giorni fino a ' + CONFIG.IOT_ALERT + ' mV', font:{ size:10, color:C_DIM } } },
+    xaxis:{ range:[0, xmax], gridcolor:'#3a3f4d', zeroline:false, fixedrange:true, title:{ text:'mV/giorno (master) · giorni fino a ' + CONFIG.IOT_ALERT + ' mV (* = con il consumo misurato)', font:{ size:10, color:C_DIM } } },
     yaxis:{ autorange:'reversed', fixedrange:true, tickfont:{ size:11, color:C_TXT } }
   }), cfg);
 

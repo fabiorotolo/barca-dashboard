@@ -151,6 +151,11 @@ function intervalliTratti(pts){
   }
   return out;
 }
+// Consumo previsto per un intervallo, unica regola per tabella, grafici e data di ricarica:
+// se l'intervallo e' gia' stato misurato (almeno CAL_MIN_DAYS giorni) si usa il misurato reale,
+// altrimenti il master (prudente: a 12 e 24 h prevede piu' consumo del modello automatico).
+const previsto = N => MODEL.misure[N] ? MODEL.misure[N].rate : master(N);
+const fontePrevisto = N => MODEL.misure[N] ? 'misurato' : 'master';
 const scostamento = (mis, rif) => rif ? (mis / rif - 1) * 100 : null;
 const fuoriMaster = pct => pct != null && Math.abs(pct) > CONFIG.SCOSTAMENTO_PCT;
 const model = N => ({ sleep: MODEL.P, work: (24/N)*MODEL.E, total: MODEL.P + (24/N)*MODEL.E });
@@ -305,12 +310,12 @@ function iotRecharge(){
   const meas = fit && fit.spanDays >= 1.5 && fit.n >= 6 ? -fit.slope : null;
   if (meas != null && meas <= 1) return { iot, charging:true };
   const itv = detectInterval(), N = itv.N && itv.N >= 1 ? itv.N : null;
-  const mod = N ? model(N).total : null;
+  const mod = N ? previsto(N) : null;
   const rate = Math.max(meas || 0, mod || 0);
   if (!rate) return { iot, rate:null };
   const at = mv => new Date(lastT + Math.max(0, (iot - mv) / rate) * DAY);
   const dAlert = at(CONFIG.IOT_ALERT), dCrit = at(CONFIG.IOT_CRIT);
-  return { iot, rate, meas, mod, N, src: meas != null && meas >= (mod || 0) ? 'misurato' : 'modello',
+  return { iot, rate, meas, mod, N, src: meas != null && meas >= (mod || 0) ? 'misurato ultimi giorni' : 'previsto ' + (N ? fontePrevisto(N) : ''),
     dAlert, dCrit, daysAlert: (dAlert - Date.now()) / DAY, daysCrit: (dCrit - Date.now()) / DAY };
 }
 const fmtDay = new Intl.DateTimeFormat('it-IT', { timeZone: CONFIG.TZ, weekday:'short', day:'2-digit', month:'2-digit' });
