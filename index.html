@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Barca-IoT</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="barca.css">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body class="kiosk">
+<div class="kiosk-root">
+
+  <div class="topbar">
+    <div class="tile" id="t-v1"><div class="hd"><span>Batteria Motore</span><span class="tag"></span></div><div class="val mono">--</div></div>
+    <div class="tile" id="t-v2"><div class="hd"><span>Batteria Servizi</span><span class="tag"></span></div><div class="val mono">--</div></div>
+    <div class="tile center"><div class="hd"><span>Ora locale</span><span class="tag"></span></div><div class="val mono" id="clock">--:--:--</div></div>
+    <div class="tile" id="t-iot"><div class="hd"><span>Batteria IoT</span><span class="tag"></span></div><div class="val mono">--</div></div>
+    <div class="tile" id="t-last"><div class="hd"><span>Ultimo dato</span><span class="tag"></span></div><div class="val mono">--</div></div>
+  </div>
+
+  <div id="banner"></div>
+
+  <div class="center-grid">
+    <section class="panel"><h2><span>Batteria Motore</span><span class="rng" id="r-v1"></span></h2><div class="chart" id="ch-v1"></div></section>
+    <section class="panel map">
+      <h2><span>Posizione · rotta</span><span class="rng" id="r-map"></span></h2>
+      <div class="mapwrap"><div id="map"></div><div class="mapinfo" id="mapinfo">--</div></div>
+    </section>
+    <section class="panel"><h2><span>Batteria Servizi</span><span class="rng" id="r-v2"></span></h2><div class="chart" id="ch-v2"></div></section>
+    <section class="panel"><h2><span>Batteria IoT (ESP32)</span><span class="rng" id="r-iot"></span></h2><div class="chart" id="ch-iot"></div></section>
+  </div>
+
+  <div class="metaline">
+    <span>Ultimo dato: <b id="f-last">--</b> | Letture totali: <b id="f-count">--</b></span>
+    <span>Pagina aggiornata: <b id="f-upd">--</b></span>
+  </div>
+
+  <div class="bottombar">
+    <div class="l"><b>Barca-IoT</b><br><span id="f-range">--</span></div>
+    <div class="ranges">
+      <button class="btn" data-range="1">1d</button>
+      <button class="btn" data-range="3">3d</button>
+      <button class="btn" data-range="7">1w</button>
+      <button class="btn" data-range="30">1m</button>
+      <button class="btn" data-range="all">Tutto</button>
+    </div>
+    <div class="navs"><a class="btn" href="consumi.html">⚡ Consumi e comandi →</a></div>
+  </div>
+</div>
+
+<script src="barca.js"></script>
+<script>
+function setTile(id, cls, val, unit, tag){
+  const el = $(id);
+  el.className = 'tile' + (cls ? ' ' + cls : '');
+  el.querySelector('.val').innerHTML = val + (unit ? `<small>${unit}</small>` : '');
+  el.querySelector('.tag').innerHTML = tag || '';
+}
+const boatCls = v => v == null ? '' : v < 11.8 ? 'bad' : v < 12.2 ? 'warn' : '';
+
+function renderTiles(){
+  const v1 = lastN('v1'), v2 = lastN('v2'), iot = lastN('iot');
+  setTile('t-v1', boatCls(v1), nf(v1,2), 'V', v1 != null ? `~${nf(soc(v1),0)}%` : '');
+  setTile('t-v2', boatCls(v2), nf(v2,2), 'V', v2 != null ? `~${nf(soc(v2),0)}%` : '');
+  const st = iotState(iot);
+  setTile('t-iot', st.cls, nf(iot,0), 'mV', st.badge);
+
+  const itv = detectInterval(), last = ROWS[ROWS.length-1];
+  if (last){
+    const ageH = (Date.now() - last.t)/3600000;
+    const stale = ageH > (itv.N || 6)*2.5;
+    const age = ageH < 1 ? Math.round(ageH*60)+'m fa' : Math.floor(ageH)+'h'+String(Math.round((ageH%1)*60)).padStart(2,'0')+' fa';
+    setTile('t-last', stale ? 'bad' : '', fmtShort(last.t).slice(6), '', (stale ? '⚠ ' : '') + fmtShort(last.t).slice(0,5) + ' · ' + age);
+    $('f-last').textContent = fmtFull(last.t);
+  }
+  $('f-count').textContent = ROWS.length;
+  $('f-upd').textContent = fmtShort(new Date());
+  const days = rangeDays();
+  $('f-range').textContent = `Range: ${rangeLabel()} | Fine: ${fmtFull(new Date())}`;
+}
+
+function renderCharts(){
+  plotSeries('ch-v1','r-v1','v1','#4cd38a','V',3,{ fill:'rgba(76,211,138,.15)' });
+  plotSeries('ch-v2','r-v2','v2','#3d9cff','V',3,{ fill:'rgba(61,156,255,.15)' });
+  plotSeries('ch-iot','r-iot','iot','#ffb84d','mV',0,{ fill:'rgba(255,184,77,.13)', thresholds:{ nearBelow:3800, lines:[
+    { v:CONFIG.IOT_ALERT, c:'#ffb84d', t:'ALERT 3500' }, { v:CONFIG.IOT_CRIT, c:'#ff5c5c', t:'CRITICA 3300' } ] } });
+  $('f-range').textContent = `Range: ${rangeLabel()} | Fine: ${fmtFull(new Date())}`;
+}
+
+async function refresh(){
+  try { await loadData(); clearError(); renderTiles(); renderCharts(); renderMap(); }
+  catch (e){ showError(e); }
+}
+window.addEventListener('load', () => {
+  initMap(); tickClock(); setInterval(tickClock, 1000);
+  setupRangeButtons(renderCharts);
+  refresh(); setInterval(refresh, CONFIG.REFRESH_MS);
+});
+</script>
+</body>
+</html>

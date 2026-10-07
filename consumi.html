@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Barca-IoT · Consumi e comandi</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
+<link rel="stylesheet" href="barca.css">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+<div class="kiosk-root">
+<div class="page">
+
+  <div class="page-hd">
+    <h1>⚓ BARCA<span>-IoT</span> · Consumi e comandi</h1>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="mono d" style="font-size:12px" id="sub">--</span>
+      <a class="btn" href="index.html">← Dashboard</a>
+    </div>
+  </div>
+
+  <div id="banner"></div>
+
+  <div class="cons-grid" id="cons"></div>
+
+  <section class="panel block">
+    <h2><span>Consumo batteria IoT nel tempo</span><span class="rng">mV/giorno · stima mobile sugli ultimi 3 giorni</span></h2>
+    <div class="chart" id="ch-rate"></div>
+    <div class="note">Ogni punto è la pendenza (regressione) delle letture dei 3 giorni precedenti, riportata a mV/giorno. Le righe tratteggiate sono i valori del modello a 3h e 6h: se i punti le seguono, il modello regge. Punti azzurri = invii ogni 6h, arancio = ogni 3h.</div>
+  </section>
+
+  <section class="panel block">
+    <h2><span>Comandi per la scheda</span><span class="rng" id="cmd-int"></span></h2>
+    <div class="note" style="margin-top:0">La scheda legge i messaggi Telegram solo quando si sveglia: un comando viene eseguito al <b>prossimo ciclo</b> (entro 3-6 ore). Premi un pulsante per copiare il comando, poi incollalo nella chat del bot.
+      <span id="tg-link"></span></div>
+    <div class="cmd-grid" id="cmds"></div>
+  </section>
+
+  <section class="panel block">
+    <h2><span>Rilevamenti GPS (ultimi 20)</span>
+      <span><button class="btn" id="dl">⬇ Scarica tutti i dati (CSV)</button></span></h2>
+    <div class="tbl-wrap" id="gpslist"></div>
+  </section>
+
+  <div class="metaline"><span id="f-count">--</span><span>Canale ThingSpeak 3151316</span></div>
+</div>
+</div>
+<div id="toast"></div>
+
+<script src="barca.js"></script>
+<script>
+/* ---------- carte consumi ---------- */
+function boatCard(key, name, capLabel){
+  const cap = CONFIG.CAP_AH[key], v = lastN(key);
+  const cs = new Date(CONFIG.CLEAN_START).getTime();
+  const lastT = ROWS.length ? ROWS[ROWS.length-1].t.getTime() : Date.now();
+  const pts = ROWS.filter(r => r[key] != null && r.t.getTime() >= Math.max(lastT - CONFIG.TREND_DAYS_BOAT*DAY, cs));
+  const fitV = linfit(pts.map(p => ({ t:p.t, y:p[key] })));
+  const fitS = linfit(pts.map(p => ({ t:p.t, y:soc(p[key]) })));
+  let h = `<div class="card"><h3>${name} <span style="text-transform:none;letter-spacing:0">(${capLabel})</span></h3>`;
+  if (v == null) return h + '<div class="row d">Nessun dato.</div></div>';
+  h += `<div class="big">${nf(v,2)} <small>V · ~${nf(soc(v),0)}%</small></div>`;
+  if (!fitV || fitV.spanDays < 1.5){
+    h += `<div class="row d">Dati insufficienti per il trend (servono almeno 2 giorni).</div>`;
+  } else {
+    h += `<div class="row">Trend ${CONFIG.TREND_DAYS_BOAT} gg: <b>${fitV.slope >= 0 ? '+' : '−'}${nf(Math.abs(fitV.slope),3)} V/giorno</b></div>`;
+    if (v >= 12.8){
+      h += `<div class="row d">Sopra 12,8 V: batteria piena, stima Ah non significativa.</div>`;
+    } else if (fitS && fitS.slope < -0.01){
+      const pctDay = -fitS.slope, s = soc(v);
+      h += `<div class="row">≈ <b>${nf(pctDay*cap/100,2)} Ah/giorno</b> (${nf(pctDay,2)} %/giorno)</div>`;
+      h += `<div class="row">Al 50%: <b>${daysStr((s-50)/pctDay)}</b> · al 20%: <b>${daysStr((s-20)/pctDay)}</b></div>`;
+    } else {
+      h += `<div class="row d">Tensione stabile o in salita (ricarica in corso).</div>`;
+    }
+  }
+  return h + '</div>';
+}
+
+function renderConsumi(){
+  const itv = detectInterval(), iot = lastN('iot');
+  const cs = new Date(CONFIG.CLEAN_START).getTime();
+  const lastT = ROWS.length ? ROWS[ROWS.length-1].t.getTime() : Date.now();
+  const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= Math.max(cs, lastT - CONFIG.TREND_DAYS_IOT*DAY));
+  const fit = linfit(pts.map(p => ({ t:p.t, y:p.iot })));
+  const N = itv.N && itv.N >= 1 ? itv.N : null;
+  $('sub').textContent = N ? `intervallo attuale: ogni ${nf(N, itv.snapped ? 0 : 1)} h` : '';
+
+  let c1 = '<div class="card"><h3>Consumo batteria IoT</h3>';
+  if (!N){
+    c1 += '<div class="row d">Intervallo non rilevabile o troppo breve (modalità test): modello non applicabile.</div>';
+  } else {
+    const m = model(N), pS = m.sleep/m.total*100, pW = m.work/m.total*100;
+    c1 += `<div class="big">${nf(m.total,1)} <small>mV/giorno (modello)</small></div>`;
+    c1 += `<div class="bar"><div class="sl" style="width:${pS}%">${nf(pS,0)}%</div><div class="wk" style="width:${pW}%">${nf(pW,0)}%</div></div>`;
+    c1 += `<div class="legend"><i style="background:#6aa6ff"></i>Deep sleep ${nf(m.sleep,1)} mV/g &nbsp; <i style="background:#ffb84d"></i>Lavoro ${nf(m.work,1)} mV/g (${nf(24/N,0)} cicli × ${nf(CONFIG.E_CICLO,2)} mV)</div>`;
+    if (fit && fit.spanDays >= 1.5 && fit.n >= 6){
+      const rate = -fit.slope;
+      c1 += rate > 1
+        ? `<div class="row" style="margin-top:8px">Misurato ultimi ${CONFIG.TREND_DAYS_IOT} gg: <b>${nf(rate,1)} ± ${nf(fit.se,1)} mV/giorno</b></div>`
+        : `<div class="row" style="margin-top:8px"><b>Non in scarica</b> (tensione stabile o in salita: ricarica in corso?)</div>`;
+    } else c1 += `<div class="row d" style="margin-top:8px">Misura reale: dati insufficienti.</div>`;
+  }
+  c1 += `<div class="note">Modello: consumo = ${nf(CONFIG.P_SLEEP,2)} + (24/N) × ${nf(CONFIG.E_CICLO,3)} mV/giorno, ricavato dai test 6h e 3h in barca (settembre-ottobre 2026).</div></div>`;
+
+  let c2 = '<div class="card"><h3>Autonomia batteria IoT (senza ricarica)</h3>';
+  if (iot == null) c2 += '<div class="row d">Nessun dato.</div>';
+  else {
+    c2 += `<div class="row d">Da ${nf(iot,0)} mV (mediana ultime 3 letture) fino a:</div>`;
+    c2 += '<div class="tbl-wrap"><table><tr><th>Invio</th><th>mV/g</th><th>a 3500 (alert)</th><th>a 3300 (critica)</th></tr>';
+    for (const k of [3,6,12,24]){
+      const r = model(k).total;
+      c2 += `<tr class="${N === k ? 'hl' : ''}"><td>${k} h${k > 6 ? '<span class="tag2">stima</span>' : ''}</td><td>${nf(r,1)}</td><td>${daysStr((iot-CONFIG.IOT_ALERT)/r)}</td><td>${daysStr((iot-CONFIG.IOT_CRIT)/r)}</td></tr>`;
+    }
+    c2 += '</table></div><div class="note">12 h e 24 h sono estrapolazioni del modello, non misurate. Verso fine scarica la tensione cala più in fretta: i valori vicino a 3300 mV sono ottimistici.</div>';
+  }
+  c2 += '</div>';
+
+  const boatNote = '<div class="note" style="margin:0">Stime indicative dalla tensione (tabella carica AGM): carichi o ricarica in corso falsano la lettura.</div>';
+  $('cons').innerHTML = c1 + c2 + `<div class="stack">${boatCard('v2','Batterie Servizi','2 × 80 Ah')}${boatCard('v1','Batteria Motore','80 Ah da confermare')}${boatNote}</div>`;
+}
+
+/* ---------- grafico consumo mobile ---------- */
+function renderRateChart(){
+  const cs = new Date(CONFIG.CLEAN_START).getTime();
+  const all = ROWS.filter(r => r.iot != null && r.t.getTime() >= cs);
+  const X = [], Y = [], C = [];
+  for (let i = 0; i < all.length; i++){
+    const t = all[i].t.getTime();
+    const win = all.filter(r => r.t.getTime() <= t && r.t.getTime() > t - 3*DAY);
+    const f = linfit(win.map(p => ({ t:p.t, y:p.iot })));
+    if (!f || f.spanDays < 2.5) continue;
+    const gap = i > 0 ? (t - all[i-1].t.getTime())/3600000 : null;
+    X.push(romeStr(all[i].t)); Y.push(-f.slope);
+    C.push(gap == null ? '#888' : gap < 4.5 ? '#ffb84d' : gap < 8 ? '#6aa6ff' : '#888');
+  }
+  const el = $('ch-rate');
+  if (!X.length){ el.innerHTML = '<div class="note" style="padding:20px">Dati insufficienti (servono almeno 3 giorni dopo l\'inizio del test).</div>'; return; }
+  const small = innerWidth <= 600;
+  const ref = (v, txt, c) => ({ type:'line', xref:'paper', x0:0, x1:1, yref:'y', y0:v, y1:v, line:{color:c, width:1, dash:'dot'} });
+  const m3 = model(3).total, m6 = model(6).total;
+  const lo = Math.min(...Y, m6), hi = Math.max(...Y, m3), pad = (hi-lo)*0.2 || 5;
+  Plotly.react(el, [
+    { x:X, y:Y, type:'scatter', mode:'lines+markers', line:{color:'#8d93a5', width:1.5}, marker:{size:6, color:C},
+      hovertemplate:'%{x|%d/%m %H:%M}<br><b>%{y:.1f} mV/giorno</b><extra></extra>' }
+  ], {
+    autosize:true, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', font:{color:'#fff', size: small ? 10 : 12},
+    margin: small ? {l:42,r:8,t:8,b:26} : {l:60,r:12,t:8,b:28}, showlegend:false,
+    xaxis:{ type:'date', gridcolor:'#555', linecolor:'#cfd2da', tickformat:'%d/%m' },
+    yaxis:{ gridcolor:'#555', linecolor:'#cfd2da', range:[lo-pad, hi+pad], title: small ? undefined : { text:'mV/giorno', font:{size:11} }, zeroline:false },
+    shapes:[ ref(m3,'','#ffb84d'), ref(m6,'','#6aa6ff') ],
+    annotations:[
+      { xref:'paper', x:0.995, xanchor:'right', yref:'y', y:m3, yanchor:'bottom', text:`modello 3h ${nf(m3,1)}`, showarrow:false, font:{size:10,color:'#ffb84d'} },
+      { xref:'paper', x:0.995, xanchor:'right', yref:'y', y:m6, yanchor:'bottom', text:`modello 6h ${nf(m6,1)}`, showarrow:false, font:{size:10,color:'#6aa6ff'} } ],
+    dragmode: isTouch ? false : 'pan'
+  }, { displayModeBar:false, responsive:true });
+}
+
+/* ---------- comandi ---------- */
+const COMMANDS = [
+  { c:'STATUS', x:'Stato completo della scheda: batterie, GPS, ultimo invio.' },
+  { c:'POSIZIONE', x:'Chiede un nuovo fix GPS: la posizione arriva su Telegram al prossimo ciclo.' },
+  { c:'INTERVALLO 3', x:'Invio ogni 3 ore (00-03-…-21). Più dati, consumo più alto.', int:3 },
+  { c:'INTERVALLO 6', x:'Invio ogni 6 ore (03-09-15-21). Compromesso consigliato.', int:6 },
+  { c:'INTERVALLO 12', x:'Invio ogni 12 ore. Consumo basso.', int:12 },
+  { c:'INTERVALLO 24', x:'Un invio al giorno. Consumo minimo.', int:24 },
+  { c:'INTERVALLO TEST', x:'Invio ogni 10 minuti, solo per prove: scarica in fretta la batteria IoT.', danger:true },
+  { c:'ALLARME BATTERIA ON', x:'Riattiva gli allarmi di batteria bassa.' },
+  { c:'ALLARME BATTERIA OFF', x:'Disattiva gli allarmi di batteria bassa.' },
+  { c:'ALLARME SENTINA ON', x:'Riattiva l\'allarme pompa di sentina.' },
+  { c:'ALLARME SENTINA OFF', x:'Disattiva l\'allarme pompa di sentina.' },
+  { c:'HELP', x:'Elenco dei comandi.' },
+  { c:'RESET', x:'Azzera statistiche, coda offline, cache GPS e contatori. Mantiene intervallo e allarmi.', danger:true }
+];
+let toastTimer;
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200); }
+async function copyText(s){
+  try { await navigator.clipboard.writeText(s); return true; } catch(e){}
+  try { const ta = document.createElement('textarea'); ta.value = s; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok; } catch(e){ return false; }
+}
+function renderCommands(){
+  const itv = detectInterval();
+  $('cmd-int').textContent = itv.N ? `intervallo attuale: ogni ${nf(itv.N, itv.snapped ? 0 : 1)} h` : '';
+  $('cmds').innerHTML = '';
+  COMMANDS.forEach(cm => {
+    const b = document.createElement('button');
+    b.className = 'cmd' + (cm.danger ? ' danger' : '') + (cm.int && itv.N === cm.int ? ' cur' : '');
+    b.innerHTML = `<div class="c">${cm.c}${cm.int && itv.N === cm.int ? ' <span class="badge ok">attivo</span>' : ''}</div><div class="x">${cm.x}</div>`;
+    b.addEventListener('click', async () => {
+      if (cm.c === 'RESET' && !confirm('RESET azzera statistiche, coda offline e cache GPS. Copiare il comando?')) return;
+      const ok = await copyText(cm.c);
+      toast(ok ? `Copiato: ${cm.c} — incollalo nella chat del bot Telegram` : `Copia non riuscita: scrivi a mano ${cm.c}`);
+    });
+    $('cmds').appendChild(b);
+  });
+  if (CONFIG.TELEGRAM_URL) $('tg-link').innerHTML = ` <a class="btn" target="_blank" rel="noopener" href="${CONFIG.TELEGRAM_URL}">Apri Telegram ↗</a>`;
+}
+
+/* ---------- elenco GPS e CSV ---------- */
+function renderGps(){
+  const fixes = gpsFixes();
+  if (!fixes.length){ $('gpslist').innerHTML = '<div class="note">Nessuna posizione GPS ancora ricevuta.</div>'; return; }
+  let h = '<table><tr><th>#</th><th>Data</th><th>Latitudine</th><th>Longitudine</th><th>Dal precedente</th><th></th></tr>';
+  for (let i = fixes.length-1; i >= 0; i--){
+    const f = fixes[i], p = fixes[i-1];
+    h += `<tr><td>${i+1}</td><td>${fmtFull(f.t)}</td><td>${f.lat.toFixed(6)}</td><td>${f.lon.toFixed(6)}</td><td>${p ? distStr(haversine(p,f)) : '--'}</td><td><a target="_blank" rel="noopener" href="https://www.google.com/maps?q=${f.lat},${f.lon}">mappa</a></td></tr>`;
+  }
+  $('gpslist').innerHTML = h + '</table>';
+}
+$('dl').addEventListener('click', () => {
+  if (!ROWS.length) return;
+  const lines = ['data_ora_italia;motore_V;servizi_V;iot_mV;latitudine;longitudine'];
+  ROWS.forEach(r => lines.push([romeStr(r.t), r.v1, r.v2, r.iot, r.lat, r.lon].map(x => x == null ? '' : String(x).replace('.', ',')).join(';')));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\n')], { type:'text/csv;charset=utf-8' }));
+  a.download = 'barca-iot-dati.csv'; a.click();
+});
+
+async function refresh(){
+  try {
+    await loadData(); clearError();
+    renderConsumi(); renderRateChart(); renderCommands(); renderGps();
+    $('f-count').textContent = `${ROWS.length} letture · prima: ${ROWS.length ? fmtFull(ROWS[0].t) : '--'}`;
+  } catch (e){ showError(e); }
+}
+window.addEventListener('load', () => { refresh(); setInterval(refresh, CONFIG.REFRESH_MS); });
+</script>
+</body>
+</html>
