@@ -114,15 +114,25 @@ let MODEL = { P: CONFIG.P_SLEEP, E: CONFIG.E_CICLO, auto: false, misure: {} };
 const model = N => ({ sleep: MODEL.P, work: (24/N)*MODEL.E, total: MODEL.P + (24/N)*MODEL.E });
 
 // Ricariche della batteria IoT: una lettura sale di oltre RICARICA_MV rispetto al minimo delle 3
-// precedenti. Ogni ricarica chiude il periodo di misura; il successivo parte dopo ASSESTAMENTO_H.
-let RICARICHE = [];
+// precedenti. La ricarica finisce all'ultima lettura ancora in salita (caricatore attaccato); da li'
+// partono ASSESTAMENTO_H ore escluse dalle misure. Dal file del 21/09/2026: dopo lo stacco la tensione
+// cala di 30-60 mV/giorno per circa 12 ore, poi torna al regime normale.
+let RICARICHE = [], IN_CARICA = new Set();
 function trovaRicariche(){
   const p = ROWS.filter(r => r.iot != null);
-  RICARICHE = [];
+  RICARICHE = []; IN_CARICA = new Set();
   for (let i = 1; i < p.length; i++){
-    const prima = Math.min(...p.slice(Math.max(0, i-3), i).map(r => r.iot));
-    if (p[i].iot - prima > CONFIG.RICARICA_MV && (!RICARICHE.length || p[i].t - RICARICHE[RICARICHE.length-1] > DAY))
-      RICARICHE.push(p[i].t.getTime());
+    const ultima = RICARICHE.length ? RICARICHE[RICARICHE.length-1] : -Infinity;
+    if (p[i].t - ultima < DAY) continue;   // subito dopo una ricarica
+    const prec = p.slice(Math.max(0, i-3), i).filter(r => r.t.getTime() >= ultima);   // solo dopo l'ultima ricarica
+    if (!prec.length) continue;
+    const prima = Math.min(...prec.map(r => r.iot));
+    if (p[i].iot - prima <= CONFIG.RICARICA_MV) continue;
+    let j = i;
+    while (j + 1 < p.length && p[j+1].iot >= p[j].iot - 2) j++;   // ancora in carica
+    for (let k = i; k <= j; k++) IN_CARICA.add(p[k].t.getTime());  // letture in carica: mai usate
+    RICARICHE.push(p[j].t.getTime());
+    i = j;
   }
 }
 // inizio dei dati validi per una misura che arriva fino al tempo t: dopo CLEAN_START e dopo
@@ -132,12 +142,13 @@ function inizioPulito(t){
   for (const r of RICARICHE) if (r <= t) s = Math.max(s, r + CONFIG.ASSESTAMENTO_H*3600000);
   return s;
 }
-const epoca = t => RICARICHE.filter(r => r <= t).length;   // quante ricariche prima di t
+const valida = r => r.iot != null && !IN_CARICA.has(r.t.getTime()) && r.t.getTime() >= inizioPulito(r.t.getTime());
+const epoca = t => RICARICHE.filter(r => r <= t).length;   // quante ricariche (finite) prima di t
 
 // Divide le letture (dopo CLEAN_START) in periodi con intervallo costante, misura il consumo di
 // ciascuno e ricava P_SLEEP ed E_CICLO con una regressione pesata sulla durata dei periodi.
 function calibraModello(){
-  const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= inizioPulito(r.t.getTime()));
+  const pts = ROWS.filter(valida);
   const snap = h => [3,6,12,24].find(k => Math.abs(h-k)/k < 0.2) || null;
   // intervallo di ogni lettura = il piu' breve tra i due vicini (un invio saltato allunga solo un lato)
   const lab = pts.map((p, i) => {
@@ -251,7 +262,7 @@ function iotRecharge(){
   const iot = lastN('iot');
   if (iot == null || !ROWS.length) return null;
   const lastT = ROWS[ROWS.length-1].t.getTime(), cs = inizioPulito(lastT);
-  const pts = ROWS.filter(r => r.iot != null && r.t.getTime() >= Math.max(cs, lastT - CONFIG.TREND_DAYS_IOT*DAY));
+  const pts = ROWS.filter(r => valida(r) && r.t.getTime() >= Math.max(cs, lastT - CONFIG.TREND_DAYS_IOT*DAY));
   const fit = linfitRobusto(pts.map(p => ({ t:p.t, y:p.iot })));
   const meas = fit && fit.spanDays >= 1.5 && fit.n >= 6 ? -fit.slope : null;
   if (meas != null && meas <= 1) return { iot, charging:true };
