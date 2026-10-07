@@ -147,7 +147,9 @@ function iotState(mv){
   return { cls:'bad', badge:'<span class="badge bad">CRITICA</span>' };
 }
 function rangeDays(){ return currentRange === 'all' ? Infinity : parseFloat(currentRange); }
-function rangeLabel(){ return ({ '1':'1d','3':'3d','7':'1w','30':'1m','all':'Tutto' })[currentRange] || currentRange; }
+const RANGES = { '3':'3d', '7':'1w', '14':'2w', '30':'1m', 'all':'Tutto' };
+if (!RANGES[currentRange]) currentRange = '7';   // es. '1' (1d) salvato prima che venisse tolto
+function rangeLabel(){ return RANGES[currentRange] || currentRange; }
 function setupRangeButtons(onChange){
   document.querySelectorAll('.btn[data-range]').forEach(b => {
     b.classList.toggle('active', b.dataset.range === currentRange);
