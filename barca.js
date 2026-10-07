@@ -17,6 +17,11 @@ const CONFIG = {
   P_SLEEP: 12.72,   // mV/giorno consumati dal solo deep sleep
   E_CICLO: 1.863,   // mV consumati da ogni ciclo di lavoro (risveglio, rete, GPS, invii)
 
+  // soglie batterie barca (AGM 12 V): ALERT ~50%, CRITICA ~10%
+  BOAT_ALERT: 12.2, BOAT_CRIT: 11.8,
+  // scala fissa dei grafici motore/servizi (si allarga solo se i valori escono, es. in ricarica)
+  BOAT_Y: [11.6, 13.0],
+
   // capacità batterie barca (Ah) — Motore da confermare
   CAP_AH: { v1: 80, v2: 160 },
 
@@ -200,7 +205,7 @@ function plotSeries(divId, rngId, key, color, unit, dec, opts = {}){
     { x, y, type:'scatter', mode:'lines+markers', line:{color, width:2}, marker:{size:4, color}, connectgaps:true,
       fill:'tozeroy', fillcolor: opts.fill || 'rgba(0,0,0,0)',
       hovertemplate:`%{x|%d/%m %H:%M}<br><b>%{y:.${dec}f} ${unit}</b><extra></extra>` },
-    { x:[x[imin],x[imax]], y:[ymin,ymax], type:'scatter', mode:'markers+text', showlegend:false, hoverinfo:'skip',
+    { x:[x[imin],x[imax]], y:[ymin,ymax], type:'scatter', mode:'markers+text', showlegend:false, hoverinfo:'skip', cliponaxis:false,
       marker:{size:8, color:['#ff8a8a','#6dd96d'], line:{color:'#fff',width:1}},
       text:[nf(ymin,dec), nf(ymax,dec)], textposition:['bottom center','top center'], textfont:{size:11, color:'#fff'} }
   ];
@@ -218,7 +223,11 @@ function plotSeries(divId, rngId, key, color, unit, dec, opts = {}){
     shapes.push({ type:'line', xref:'x', yref:'paper', x0:romeStr(cs), x1:romeStr(cs), y0:0, y1:1, line:{color:'#888', width:1, dash:'dash'} });
     annots.push({ xref:'x', x:romeStr(cs), yref:'paper', y:1, yanchor:'top', xanchor:'left', text:' inizio test', showarrow:false, font:{size:10, color:'#aaa'} });
   }
-  const pad = (hi - lo) * 0.14 || (dec >= 2 ? 0.02 : 10);
+  let pad = (hi - lo) * 0.14 || (dec >= 2 ? 0.02 : 10);
+  if (opts.yFixed){   // scala fissa, allargata solo se i dati escono
+    const p2 = (opts.yFixed[1] - opts.yFixed[0]) * 0.03;
+    lo = Math.min(opts.yFixed[0], ymin - p2); hi = Math.max(opts.yFixed[1], ymax + p2); pad = 0;
+  }
   const spanH = (tmax - tmin) / 3600000;
   const small = innerWidth <= 600;
   const layout = {
@@ -227,7 +236,7 @@ function plotSeries(divId, rngId, key, color, unit, dec, opts = {}){
     font:{ color:'#ffffff', size: small ? 10 : 12 },
     margin: small ? {l:44, r:8, t:8, b:26} : {l:52, r:12, t:8, b:28},
     xaxis:{ type:'date', range:[romeStr(new Date(tmin)), romeStr(new Date(tmax))], gridcolor:'#555555', linecolor:'#cfd2da', tickformat: spanH <= 49 ? '%H:%M' : '%d/%m', hoverformat:'%d/%m %H:%M' },
-    yaxis:{ gridcolor:'#555555', linecolor:'#cfd2da', range:[lo - pad, hi + pad], fixedrange:true, tickformat:`.${dec}f`, zeroline:false },
+    yaxis:{ gridcolor:'#555555', linecolor:'#cfd2da', range:[lo - pad, hi + pad], fixedrange:true, tickformat:`.${opts.tickDec ?? dec}f`, zeroline:false },
     shapes, annotations: annots, showlegend:false, dragmode:'pan', hovermode:'closest'
   };
   if (el.querySelector('.note')) el.innerHTML = '';

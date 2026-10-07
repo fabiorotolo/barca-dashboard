@@ -59,7 +59,9 @@ function setTile(id, cls, val, unit, tag){
   el.querySelector('.val').innerHTML = val + (unit ? `<small>${unit}</small>` : '');
   el.querySelector('.tag').innerHTML = tag || '';
 }
-const boatCls = v => v == null ? '' : v < 11.8 ? 'bad' : v < 12.2 ? 'warn' : '';
+const boatCls = v => v == null ? '' : v < CONFIG.BOAT_CRIT ? 'bad' : v < CONFIG.BOAT_ALERT ? 'warn' : '';
+const BOAT_OPTS = { yFixed: CONFIG.BOAT_Y, tickDec:1, thresholds:{ nearBelow:Infinity, lines:[
+  { v:CONFIG.BOAT_ALERT, c:'#ffb84d', t:'ALERT ' + nf(CONFIG.BOAT_ALERT,1) }, { v:CONFIG.BOAT_CRIT, c:'#ff5c5c', t:'CRITICA ' + nf(CONFIG.BOAT_CRIT,1) } ] } };
 
 function renderTiles(){
   const v1 = lastN('v1'), v2 = lastN('v2'), iot = lastN('iot');
@@ -83,8 +85,8 @@ function renderTiles(){
 }
 
 function renderCharts(){
-  plotSeries('ch-v1','r-v1','v1','#4cd38a','V',3,{ fill:'rgba(76,211,138,.15)' });
-  plotSeries('ch-v2','r-v2','v2','#3d9cff','V',3,{ fill:'rgba(61,156,255,.15)' });
+  plotSeries('ch-v1','r-v1','v1','#4cd38a','V',3,{ fill:'rgba(76,211,138,.15)', ...BOAT_OPTS });
+  plotSeries('ch-v2','r-v2','v2','#3d9cff','V',3,{ fill:'rgba(61,156,255,.15)', ...BOAT_OPTS });
   plotSeries('ch-iot','r-iot','iot','#ffb84d','mV',0,{ fill:'rgba(255,184,77,.13)', thresholds:{ nearBelow:3800, lines:[
     { v:CONFIG.IOT_ALERT, c:'#ffb84d', t:'ALERT 3500' }, { v:CONFIG.IOT_CRIT, c:'#ff5c5c', t:'CRITICA 3300' } ] } });
   $('f-range').textContent = windowLabel() + ' | Trascina un grafico per andare indietro nel tempo';
