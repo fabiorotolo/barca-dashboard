@@ -21,6 +21,7 @@ a{color:var(--accent)}
 .tile .hd{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim)}
 .tile .hd .tag{font-size:11px;letter-spacing:.04em}
 .tile .val{font-size:26px;font-weight:700;line-height:1.15;margin-top:1px;white-space:nowrap}
+.tile .sub{display:none;font-size:12px;color:var(--text-dim);margin-top:2px}
 .tile .val small{font-size:12px;color:var(--text-dim);font-weight:400;margin-left:4px}
 .tile.center .val{text-align:center;font-size:28px}
 .tile.warn .val{color:var(--warn)} .tile.bad .val{color:var(--danger)} .tile.good .val{color:var(--ok)}
@@ -125,6 +126,8 @@ tr.hl td{background:rgba(61,124,255,.16)}
   .duo{grid-template-columns:1fr}
   .info-box,.info.dx .info-box{position:fixed;left:12px;right:12px;top:auto;bottom:96px;width:auto;z-index:1000}
   .tile .val{font-size:22px}
+  #t-iot .hd .rc{display:none}
+  #t-iot .sub{display:block}
   th,td{padding:5px 5px}
   th{white-space:normal;line-height:1.15}
 }

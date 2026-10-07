@@ -396,7 +396,9 @@ function plotSeries(divId, rngId, key, color, unit, dec, opts = {}){
       hovertemplate:`%{x|%d/%m %H:%M}<br><b>%{y:.${dec}f} ${unit}</b><extra></extra>` },
     { x:[x[imin],x[imax]], y:[ymin,ymax], type:'scatter', mode:'markers+text', showlegend:false, hoverinfo:'skip', cliponaxis:false,
       marker:{size:8, color:['#ff8a8a','#6dd96d'], line:{color:'#fff',width:1}},
-      text:[nf(ymin,dec), nf(ymax,dec)], textposition:['bottom center','top center'], textfont:{size:11, color:'#fff'} }
+      // etichette min/max verso l'interno del grafico, cosi' non coprono l'asse o i bordi
+      text:[nf(ymin,dec), nf(ymax,dec)], textfont:{size:11, color:'#fff'},
+      textposition:[imin, imax].map((k, j) => (j ? 'top ' : 'bottom ') + (k < pts.length*0.15 ? 'right' : k > pts.length*0.85 ? 'left' : 'center')) }
   ];
   const shapes = [], annots = [];
   let lo = ymin, hi = ymax;
@@ -411,7 +413,7 @@ function plotSeries(divId, rngId, key, color, unit, dec, opts = {}){
   const cs = new Date(CONFIG.CLEAN_START);
   if (cs >= pts[0].t){
     shapes.push({ type:'line', xref:'x', yref:'paper', x0:romeStr(cs), x1:romeStr(cs), y0:0, y1:1, line:{color:'#888', width:1, dash:'dash'} });
-    annots.push({ xref:'x', x:romeStr(cs), yref:'paper', y:1, yanchor:'top', xanchor:'left', text:' inizio test', showarrow:false, font:{size:10, color:'#aaa'} });
+    annots.push({ xref:'x', x:romeStr(cs), yref:'paper', y:0, yanchor:'bottom', xanchor:'left', text:' inizio test', showarrow:false, font:{size:10, color:'#aaa'} });
   }
   if (key === 'iot') for (const r of RICARICHE){   // ricariche della batteria IoT
     if (r < tmin || r > tmax) continue;
