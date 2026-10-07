@@ -145,10 +145,10 @@ function renderRateChart(){
     { x:X, y:Y, type:'scatter', mode:'lines+markers', line:{color:'#8d93a5', width:1.5}, marker:{size:6, color:C},
       hovertemplate:'%{x|%d/%m %H:%M}<br><b>%{y:.1f} mV/giorno</b><extra></extra>' }
   ], {
-    autosize:true, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', font:{color:'#fff', size: small ? 10 : 12},
-    margin: small ? {l:42,r:8,t:8,b:26} : {l:60,r:12,t:8,b:28}, showlegend:false,
+    autosize:true, separators:',.', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', font:{color:'#fff', size: small ? 10 : 12},
+    margin: small ? {l:36,r:8,t:8,b:26} : {l:44,r:12,t:8,b:28}, showlegend:false,
     xaxis:{ type:'date', gridcolor:'#555', linecolor:'#cfd2da', tickformat:'%d/%m' },
-    yaxis:{ gridcolor:'#555', linecolor:'#cfd2da', range:[lo-pad, hi+pad], title: small ? undefined : { text:'mV/giorno', font:{size:11} }, zeroline:false },
+    yaxis:{ gridcolor:'#555', linecolor:'#cfd2da', range:[lo-pad, hi+pad], fixedrange:true, zeroline:false },
     shapes:[ ref(m3,'','#ffb84d'), ref(m6,'','#6aa6ff') ],
     annotations:[
       { xref:'paper', x:0.995, xanchor:'right', yref:'y', y:m3, yanchor:'bottom', text:`modello 3h ${nf(m3,1)}`, showarrow:false, font:{size:10,color:'#ffb84d'} },

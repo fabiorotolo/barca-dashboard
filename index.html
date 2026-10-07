@@ -70,13 +70,14 @@ function renderTiles(){
 
   const itv = detectInterval(), last = ROWS[ROWS.length-1];
   if (last){
-    const ageH = (Date.now() - last.t)/3600000;
+    const ageMin = Math.max(0, Math.round((Date.now() - last.t)/60000)), ageH = ageMin/60;
     const stale = ageH > (itv.N || 6)*2.5;
-    const age = ageH < 1 ? Math.round(ageH*60)+'m fa' : Math.floor(ageH)+'h'+String(Math.round((ageH%1)*60)).padStart(2,'0')+' fa';
-    setTile('t-last', stale ? 'bad' : '', fmtShort(last.t).slice(6), '', (stale ? '⚠ ' : '') + fmtShort(last.t).slice(0,5) + ' · ' + age);
+    const age = ageMin < 60 ? `${ageMin} min` : ageH < 48 ? `${Math.floor(ageH)} h ${String(ageMin%60).padStart(2,'0')}` : `${Math.floor(ageH/24)} gg`;
+    const tag = (stale ? '<span class="badge bad">IN RITARDO</span> ' : '') + fmtShort(last.t);
+    setTile('t-last', stale ? 'bad' : 'good', age, 'fa', tag);
     $('f-last').textContent = fmtFull(last.t);
   }
-  $('f-count').textContent = ROWS.length;
+  $('f-count').textContent = ROWS.length + (itv.N ? ` | Invio atteso ogni ${nf(itv.N, itv.snapped ? 0 : 1)} h` : '');
   $('f-upd').textContent = fmtShort(new Date());
   const days = rangeDays();
   $('f-range').textContent = `Range: ${rangeLabel()} | Fine: ${fmtFull(new Date())}`;
@@ -87,7 +88,7 @@ function renderCharts(){
   plotSeries('ch-v2','r-v2','v2','#3d9cff','V',3,{ fill:'rgba(61,156,255,.15)' });
   plotSeries('ch-iot','r-iot','iot','#ffb84d','mV',0,{ fill:'rgba(255,184,77,.13)', thresholds:{ nearBelow:3800, lines:[
     { v:CONFIG.IOT_ALERT, c:'#ffb84d', t:'ALERT 3500' }, { v:CONFIG.IOT_CRIT, c:'#ff5c5c', t:'CRITICA 3300' } ] } });
-  $('f-range').textContent = `Range: ${rangeLabel()} | Fine: ${fmtFull(new Date())}`;
+  $('f-range').textContent = `Range: ${rangeLabel()} | Fine: ${fmtFull(new Date())}` + (isTouch ? '' : ' | Trascina i grafici per scorrere, doppio clic per tornare');
 }
 
 async function refresh(){

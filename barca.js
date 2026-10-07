@@ -20,6 +20,10 @@ const CONFIG = {
   // capacità batterie barca (Ah) — Motore da confermare
   CAP_AH: { v1: 80, v2: 160 },
 
+  // campi GPS: null = automatico (latitude/longitude del feed, oppure campi chiamati "lat"/"lon");
+  // altrimenti es. ['field4','field5']
+  GPS_FIELDS: null,
+
   MAP_POINTS: 20,
   TREND_DAYS_IOT: 5,
   TREND_DAYS_BOAT: 7,
@@ -78,6 +82,7 @@ const model = N => ({ sleep: CONFIG.P_SLEEP, work: (24/N)*CONFIG.E_CICLO, total:
 
 /* ================= DATI ================= */
 let ROWS = [];
+let CHANNEL = {};
 let currentRange = '7';
 try { const s = localStorage.getItem('barca-range'); if (s) currentRange = s; } catch(e){}
 
@@ -86,15 +91,28 @@ async function loadData(){
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const j = await res.json();
+  CHANNEL = j.channel || {};
+  const [kLat, kLon] = gpsKeys(j.feeds || []);
   ROWS = (j.feeds || []).map(f => {
     let v1 = num(f.field1), v2 = num(f.field2), iot = num(f.field3);
-    let lat = num(f.latitude), lon = num(f.longitude);
+    let lat = num(f[kLat]), lon = num(f[kLon]);
     if (v1 != null && (v1 < 8 || v1 > 16)) v1 = null;
     if (v2 != null && (v2 < 8 || v2 > 16)) v2 = null;
     if (iot != null && (iot < 2500 || iot > 4500)) iot = null;
     if (lat == null || lon == null || (lat === 0 && lon === 0) || Math.abs(lat) > 90 || Math.abs(lon) > 180){ lat = lon = null; }
     return { t: new Date(f.created_at), v1, v2, iot, lat, lon };
   }).filter(r => !isNaN(r.t)).sort((a,b) => a.t - b.t);
+}
+// dove stanno latitudine e longitudine nel canale
+function gpsKeys(feeds){
+  if (CONFIG.GPS_FIELDS) return CONFIG.GPS_FIELDS;
+  if (feeds.some(f => num(f.latitude) && num(f.longitude))) return ['latitude','longitude'];
+  const names = Object.keys(CHANNEL).filter(k => /^field\d$/.test(k));
+  const lat = names.find(k => /lat/i.test(CHANNEL[k])), lon = names.find(k => /lon|lng/i.test(CHANNEL[k]));
+  return lat && lon ? [lat, lon] : ['latitude','longitude'];
+}
+function channelFields(){
+  return Object.keys(CHANNEL).filter(k => /^field\d$/.test(k)).sort().map(k => `${k} "${CHANNEL[k]}"`).join(', ');
 }
 function showError(e){
   const b = $('banner'); if (!b) return;
@@ -141,12 +159,26 @@ function tickClock(){
 }
 
 /* ================= GRAFICI ================= */
+// i grafici disegnati con plotSeries scorrono insieme sull'asse del tempo
+const LINKED = new Set();
+let DEFAULT_X = null, syncing = false;
+function syncX(srcId, ev){
+  if (syncing) return;
+  let upd;
+  if (ev['xaxis.range[0]'] !== undefined) upd = { 'xaxis.range': [ev['xaxis.range[0]'], ev['xaxis.range[1]']] };
+  else if (ev['xaxis.range']) upd = { 'xaxis.range': ev['xaxis.range'] };
+  else if (ev['xaxis.autorange'] && DEFAULT_X) upd = { 'xaxis.range': DEFAULT_X };  // doppio clic: torna al periodo scelto
+  else return;
+  syncing = true;
+  const ids = [...LINKED].filter(id => ev['xaxis.autorange'] || id !== srcId);
+  Promise.all(ids.map(id => Plotly.relayout($(id), upd))).finally(() => { syncing = false; });
+}
 function plotSeries(divId, rngId, key, color, unit, dec, opts = {}){
   const days = rangeDays();
   const tmin = isFinite(days) ? Date.now() - days*DAY : 0;
   const pts = ROWS.filter(r => r[key] != null && r.t.getTime() >= tmin);
   const el = $(divId);
-  if (!pts.length){ Plotly.purge(el); el.innerHTML = '<div class="note" style="padding:20px">Nessun dato nel periodo selezionato.</div>'; if ($(rngId)) $(rngId).textContent=''; return; }
+  if (!pts.length){ Plotly.purge(el); el._linked = false; LINKED.delete(divId); el.innerHTML = '<div class="note" style="padding:20px">Nessun dato nel periodo selezionato.</div>'; if ($(rngId)) $(rngId).textContent=''; return; }
   const x = pts.map(p => romeStr(p.t)), y = pts.map(p => p[key]);
   const ymin = Math.min(...y), ymax = Math.max(...y), imin = y.indexOf(ymin), imax = y.indexOf(ymax);
   if ($(rngId)) $(rngId).textContent = `Min: ${nf(ymin,dec)} ${unit} | Max: ${nf(ymax,dec)} ${unit}`;
@@ -176,17 +208,19 @@ function plotSeries(divId, rngId, key, color, unit, dec, opts = {}){
   const pad = (hi - lo) * 0.14 || (dec >= 2 ? 0.02 : 10);
   const spanH = (Date.now() - (isFinite(days) ? tmin : pts[0].t.getTime())) / 3600000;
   const small = innerWidth <= 600;
-  const yTitle = opts.yTitle || unit;
+  DEFAULT_X = [romeStr(new Date(isFinite(days) ? tmin : ROWS[0].t.getTime())), romeStr(new Date())];
   const layout = {
-    autosize:true,
+    autosize:true, separators:',.', uirevision: currentRange,
     paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
     font:{ color:'#ffffff', size: small ? 10 : 12 },
-    margin: small ? {l:46, r:8, t:8, b:26} : {l:60, r:12, t:8, b:28},
-    xaxis:{ type:'date', gridcolor:'#555555', linecolor:'#cfd2da', tickformat: spanH <= 49 ? '%H:%M' : '%d/%m', hoverformat:'%d/%m %H:%M' },
-    yaxis:{ gridcolor:'#555555', linecolor:'#cfd2da', range:[lo - pad, hi + pad], tickformat:`.${dec}f`, zeroline:false, title: small ? undefined : { text:yTitle, font:{size:11} } },
+    margin: small ? {l:44, r:8, t:8, b:26} : {l:52, r:12, t:8, b:28},
+    xaxis:{ type:'date', range: DEFAULT_X, gridcolor:'#555555', linecolor:'#cfd2da', tickformat: spanH <= 49 ? '%H:%M' : '%d/%m', hoverformat:'%d/%m %H:%M' },
+    yaxis:{ gridcolor:'#555555', linecolor:'#cfd2da', range:[lo - pad, hi + pad], fixedrange:true, tickformat:`.${dec}f`, zeroline:false },
     shapes, annotations: annots, showlegend:false, dragmode: isTouch ? false : 'pan', hovermode:'closest'
   };
   Plotly.react(el, traces, layout, { displayModeBar:false, responsive:true, scrollZoom:false });
+  LINKED.add(divId);
+  if (!el._linked){ el.on('plotly_relayout', ev => syncX(divId, ev)); el._linked = true; }
 }
 
 /* ================= MAPPA ================= */
@@ -206,7 +240,11 @@ function renderMap(){
   const fixes = gpsFixes();
   mapLayer.clearLayers();
   const rng = $('r-map');
-  if (!fixes.length){ $('mapinfo').textContent = 'Nessuna posizione GPS ancora ricevuta.'; if (rng) rng.textContent=''; return; }
+  if (!fixes.length){
+    const f = channelFields();
+    $('mapinfo').textContent = 'Nessuna posizione GPS nei dati ThingSpeak: la scheda non invia latitudine/longitudine al canale.' + (f ? ' Campi del canale: ' + f + '.' : '');
+    if (rng) rng.textContent = ''; return;
+  }
   const coords = fixes.map(f => [f.lat, f.lon]);
   if (fixes.length > 1) L.polyline(coords, { color:'#3d7cff', weight:3, opacity:.85, dashArray:'6 6' }).addTo(mapLayer);
   fixes.forEach((f, i) => {
