@@ -35,7 +35,7 @@
       <div><h3>Come è ricavato il master · confronto con le misure</h3><div class="chart" id="ch-cal"></div></div>
     </div>
     <div class="note">Il <b>master</b> è il consumo "pulito" di riferimento, fisso: calcolato da periodi di almeno 5 giorni senza consumi anomali (6 h dal 22 al 28/09, 5,8 giorni; 3 h dal 28/09 al 03/10, 5,3 giorni).
-      A sinistra: ogni barra è quanto consuma la scheda in <b>24 ore</b> a quell'intervallo: la parte <b>blu</b> è il deep sleep (sempre uguale), la parte <b>arancio</b> sono i risvegli (numero di risvegli al giorno × costo di un risveglio); a destra della barra il conto per esteso. Il rombo è il consumo misurato (dettagli passando sopra); i giorni di autonomia sono nella tabella in alto.
+      A sinistra: ogni barra è quanto consuma la scheda in <b>24 ore</b> a quell'intervallo: la parte <b>blu</b> è il deep sleep (sempre uguale), la parte <b>arancio</b> sono i risvegli (numero di risvegli al giorno × costo di un risveglio); a destra della barra il conto per esteso e i <b>giorni stimati</b> fino a 3500 mV con la carica attuale (come nella tabella: consumo misurato se l'intervallo è già stato misurato, altrimenti master). Il rombo è il consumo misurato (dettagli passando sopra).
       A destra: il triangolo arancio tra i due riferimenti dà il costo di un risveglio; prolungando fino a 0 risvegli resta il deep sleep (fascia blu).
       I rombi sono i periodi misurati: se si scostano dal master più del 15% diventano <b style="color:var(--danger)">rossi</b> (consumo extra: GPS, rete, caldo…) o <b style="color:var(--ok)">verdi</b>.</div>
   </section>
@@ -67,7 +67,7 @@
 <script src="chiavi-cifrate.js?v=20261008h"></script>
 <script src="cassaforte.js?v=20261008h"></script>
 <script src="nav.js?v=20261008h" data-repo="barca" data-pagina="comandi" data-dove=".navs"></script>
-<script src="barca.js?v=20261008o"></script>
+<script src="barca.js?v=20261008p"></script>
 <script>
 /* ---------- carte consumi ---------- */
 function boatCard(key, name, capLabel){
@@ -215,12 +215,14 @@ function renderSplit(){
   const y = Ns.map(N => `<b>ogni ${N} h</b><br><span style="font-size:10px;color:${C_DIM}">${24/N} ${24/N === 1 ? 'risveglio' : 'risvegli'}/giorno</span>`);
   const tot = Ns.map(master), wk = Ns.map(N => 24/N*mE);
   const mis = Ns.map(N => MODEL.misure[N] ? MODEL.misure[N].rate : null);
-  const xmax = Math.max(...tot) * (small ? 2.35 : 2.05);
+  const xmax = Math.max(...tot) * (small ? 2.6 : 2.25);
   const ann = Ns.map((N, i) => ({
     x: Math.max(tot[i], mis[i] || 0), y: y[i], xanchor:'left', xshift:10, showarrow:false, align:'left',
     font:{ size: small ? 10 : 11, color: N === cur ? '#fff' : C_TXT },
     text: `<span style="color:#7fb0ff">${nf(mP,1)}</span> + <span style="color:#e3a24a">${nf(wk[i],1)}</span> = <b>${nf(tot[i],1)} mV</b>` +
-          `${N === cur ? '  ◀ attuale' : ''}`
+          `${N === cur ? '  ◀ attuale' : ''}` +
+          (iot != null ? `<br><span style="color:${N === cur ? '#fff' : C_TXT}">→ <b>${daysStr(Math.max(0, (iot - CONFIG.IOT_ALERT) / previsto(N)))}</b>${small ? '' : ' fino a ' + CONFIG.IOT_ALERT + ' mV'}</span>` +
+            (MODEL.misure[N] ? `<span style="color:${C_DIM}"> (${small ? 'mis.' : 'con il misurato'} ${nf(previsto(N),1)})</span>` : `<span style="color:${C_DIM}"> (stima)</span>`) : '')
   }));
   Plotly.react($('ch-split'), [
     { type:'bar', orientation:'h', name:'Deep sleep (24 h)', y, x: Ns.map(() => mP),
